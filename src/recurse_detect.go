@@ -27,13 +27,6 @@ var taobaoURL string = ipconfig.Taobao_url
 
 const BATCH_NUM = 5
 
-const (
-	goon        = "continue detect"
-	leftmove    = "left equal, left move to right"
-	rightmove   = "right equal, right move to left"
-	morenetwork = "!!!more network!!!"
-)
-
 func main() {
 
 	ipinfoMap := iputil.GetDetectedIpInfo(fIpInfo)
@@ -253,49 +246,49 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 		//fmt.Println("+++ipinfo1", mipinfo1)
 		//fmt.Println("+++startmap", startipMap)
 		//fmt.Println("+++endipmap", endipMap)
-		finded = QualifiedIpAtLevel("country", mipinfo1, startipMap, endipMap)
+		finded = iputil.QualifiedIpAtLevel("country", mipinfo1, startipMap, endipMap)
 		//fmt.Println("country finded:", finded)
 		switch finded {
-		case goon:
-			finded = QualifiedIpAtLevel("isp", mipinfo1, startipMap, endipMap)
+		case ipconfig.Goon:
+			finded = iputil.QualifiedIpAtLevel("isp", mipinfo1, startipMap, endipMap)
 			//fmt.Println("isp finded:", finded)
 			switch finded {
-			case goon:
-				finded = QualifiedIpAtLevel("region", mipinfo1, startipMap, endipMap)
+			case ipconfig.Goon:
+				finded = iputil.QualifiedIpAtLevel("region", mipinfo1, startipMap, endipMap)
 				//fmt.Println("province finded:", finded)
 				switch finded {
-				case goon:
+				case ipconfig.Goon:
 					fmt.Println("this is same network:", ip1_str, ip2_str)
 					SaveSameNetwork(ip1_str, ip2_str, ipinfoMap[ip1_str], resultFP)
-				case leftmove:
+				case ipconfig.Leftmove:
 					SaveSameNetwork(ip1_str, mip, ipinfoMap[ip1_str], resultFP)
 					CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
-				case rightmove:
+				case ipconfig.Rightmove:
 					SaveSameNetwork(mip_rfirst, ip2_str, ipinfoMap[mip_rfirst], resultFP)
 					CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
-				case morenetwork:
+				case ipconfig.Morenetwork:
 					CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
 					CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
 				}
 
-			case leftmove:
+			case ipconfig.Leftmove:
 				SaveSameNetwork(ip1_str, mip, ipinfoMap[ip1_str], resultFP)
 				CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
-			case rightmove:
+			case ipconfig.Rightmove:
 				SaveSameNetwork(mip_rfirst, ip2_str, ipinfoMap[mip_rfirst], resultFP)
 				CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
-			case morenetwork:
+			case ipconfig.Morenetwork:
 				CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
 				CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
 			}
 
-		case leftmove:
+		case ipconfig.Leftmove:
 			SaveSameNetwork(ip1_str, mip, ipinfoMap[ip1_str], resultFP)
 			CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
-		case rightmove:
+		case ipconfig.Rightmove:
 			SaveSameNetwork(mip_rfirst, ip2_str, ipinfoMap[mip_rfirst], resultFP)
 			CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
-		case morenetwork:
+		case ipconfig.Morenetwork:
 			CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
 			CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
 		}
@@ -313,18 +306,4 @@ func SaveSameNetwork(startip, endip string, ipinfoMap interface{}, fileFP *os.Fi
 	result := iputil.Format_to_output(ipmap)
 	fileFP.WriteString(startip + "|" + endip + "|" + strconv.Itoa(int(lens)) + "|" + result + "\n")
 	fileFP.Sync()
-}
-
-func QualifiedIpAtLevel(level string, mipinfo1 map[string]string, ipstart, ipend map[string]string) string {
-	ipl := mipinfo1[level]
-	start := ipstart[level]
-	end := ipend[level]
-	if ipl == start && ipl == end {
-		return goon
-	} else if ipl == start && ipl != end {
-		return leftmove
-	} else if ipl != start && ipl == end {
-		return rightmove
-	}
-	return morenetwork
 }

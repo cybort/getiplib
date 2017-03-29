@@ -6,3 +6,10 @@ var F_not_same = "all/ip_not_the_same_network.txt"
 var F_ip_result_detected string = "all/network_detected.txt"
 var F_breakpoint_file string = "etc/breakpoint.info"
 var Taobao_url string = "http://ip.taobao.com/service/getIpInfo.php?ip="
+
+const (
+	Goon        = "continue detect"
+	Leftmove    = "left equal, left move to right"
+	Rightmove   = "right equal, right move to left"
+	Morenetwork = "!!!more network!!!"
+)
