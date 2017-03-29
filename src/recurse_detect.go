@@ -13,7 +13,7 @@ import (
 )
 
 var fileSuffix string = ".again"
-var fProblemIP string = "all/detect_again_iprange.txt"
+var fProblemIP string = "all/merge_break_ip.txt"
 
 //var fResult string = "all/network_after_split.txt" + fileSuffix
 var fMiddle string = "all/middle_result_store.txt" + fileSuffix
@@ -24,6 +24,8 @@ var fIpInfo string = "all/same_network.txt"
 //var fIpInfo string = ipconfig.F_ip_result_detected
 
 var taobaoURL string = ipconfig.Taobao_url
+
+const BATCH_NUM = 5
 
 const (
 	goon        = "continue detect"
@@ -85,6 +87,8 @@ func main() {
 
 	defer breakpoint_file.Close()
 
+	var batch_iplist [BATCH_NUM]map[string]string
+	var detect_count int = 0
 	for {
 		bline, isPrefix, err := br.ReadLine()
 		if err != nil {
@@ -109,13 +113,65 @@ func main() {
 		arr := strings.Split(line, "|")
 		startip := arr[0]
 		endip := strings.TrimSuffix(arr[1], "\n")
-		CalcuAndSplit(startip, endip, ipinfoMap, resultFP, middleFP)
+		//CalcuAndSplit(startip, endip, ipinfoMap, resultFP, middleFP)
+		linenum := strconv.Itoa(fileno)
+		tmp := map[string]string{
+			"startip":  startip,
+			"endip":    endip,
+			"fileline": linenum,
+		}
+		batch_iplist[detect_count] = tmp
+		if detect_count == BATCH_NUM-1 {
+			batch_detect(batch_iplist[0:], ipinfoMap, resultFP, middleFP)
+			detect_count = 0
+			breakpoint_file.Truncate(0)
+			breakpoint_file.Seek(0, 0)
+			fmt.Fprintf(breakpoint_file, "%d", fileno)
+			time.Sleep(1 * time.Second)
+		} else {
+			detect_count += 1
+		}
+	}
 
+	if detect_count > 0 {
+		lineno := batch_detect(batch_iplist[0:detect_count], ipinfoMap, resultFP, middleFP)
 		breakpoint_file.Truncate(0)
 		breakpoint_file.Seek(0, 0)
-		fmt.Fprintf(breakpoint_file, "%d", fileno)
-		time.Sleep(1 * time.Second)
+		fmt.Fprintf(breakpoint_file, "%d", lineno)
 	}
+
+}
+
+func batch_detect(linelist []map[string]string, ipinfoMap map[string]interface{}, resultFP, middleresultFP *os.File) int {
+
+	resultlist := make([]chan int, 0, len(linelist))
+	fmt.Println("-----------------batch start-----------")
+	for _, ipinfo := range linelist {
+		startip := ipinfo["startip"]
+		endip := ipinfo["endip"]
+		fileline, _ := strconv.Atoi(ipinfo["fileline"])
+		result := start_recurse_detect(startip, endip, ipinfoMap, resultFP, middleresultFP, fileline)
+		resultlist = append(resultlist, result)
+	}
+
+	var fileno int
+	for _, result_ch := range resultlist {
+		fileno = <-result_ch
+		fmt.Println(" detect line no -----> ", fileno)
+	}
+	fmt.Println("-----------------batch end-----------")
+
+	return fileno
+}
+
+func start_recurse_detect(startip, endip string, ipinfoMap map[string]interface{}, resultFP, middleFP *os.File, fileline int) chan int {
+	result := make(chan int, 1)
+	go func(startip, endip string, ipinfoMap map[string]interface{}, resultFP, middleFP *os.File, fileline int) {
+		CalcuAndSplit(startip, endip, ipinfoMap, resultFP, middleFP)
+		result <- fileline
+	}(startip, endip, ipinfoMap, resultFP, middleFP, fileline)
+
+	return result
 }
 
 func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resultFP, middleresultFP *os.File) {
@@ -142,6 +198,11 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 		startipMap = info1.(map[string]string)
 	}
 
+	if startip == endip {
+		SaveSameNetwork(startip, endip, ipinfoMap[startip], resultFP)
+		return
+	}
+
 	info2, b2 := ipinfoMap[endip]
 	if b2 == false {
 		url2 := fmt.Sprintf("%s%s", taobaoURL, endip)
@@ -151,11 +212,6 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 		middleresultFP.WriteString(endip + "|" + endip + "|1|" + result2 + "\n")
 	} else {
 		endipMap = info2.(map[string]string)
-	}
-
-	if startip == endip {
-		SaveSameNetwork(startip, endip, ipinfoMap[startip], resultFP)
-		return
 	}
 
 	ip1 := iputil.InetAtonInt(startip)
@@ -170,7 +226,7 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 		fmt.Println("start|middle-ip|end", ip1_str, mip, ip2_str)
 		url1 := fmt.Sprintf("%s%s", taobaoURL, mip)
 		url2 := fmt.Sprintf("%s%s", taobaoURL, mip_rfirst)
-		var mipinfo1, mipinfo2 map[string]string
+		var mipinfo1 map[string]string
 
 		mipInfo1, exist1 := ipinfoMap[mip]
 		if exist1 == false {
@@ -184,34 +240,32 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 			mipinfo1 = mipInfo1.(map[string]string)
 		}
 
-		mipInfo2, exist2 := ipinfoMap[mip_rfirst]
+		_, exist2 := ipinfoMap[mip_rfirst]
 		if exist2 == false {
-			mipinfo2, _ = iputil.ParseUrlToMap(url2)
+			mipinfo2, _ := iputil.ParseUrlToMap(url2)
 			ipinfoMap[mip_rfirst] = mipinfo2
 			result2 := iputil.Format_to_output(mipinfo2)
 			middleresultFP.WriteString(mip_rfirst + "|" + mip_rfirst + "|1|" + result2 + "\n")
 			middleresultFP.Sync()
-		} else {
-			mipinfo2 = mipInfo2.(map[string]string)
 		}
 
 		var finded string
-		fmt.Println("+++ipinfo1", mipinfo1)
-		fmt.Println("+++startmap", startipMap)
-		fmt.Println("+++endipmap", endipMap)
+		//fmt.Println("+++ipinfo1", mipinfo1)
+		//fmt.Println("+++startmap", startipMap)
+		//fmt.Println("+++endipmap", endipMap)
 		finded = QualifiedIpAtLevel("country", mipinfo1, startipMap, endipMap)
-		fmt.Println("country finded:", finded)
+		//fmt.Println("country finded:", finded)
 		switch finded {
 		case goon:
 			finded = QualifiedIpAtLevel("isp", mipinfo1, startipMap, endipMap)
-			fmt.Println("isp finded:", finded)
+			//fmt.Println("isp finded:", finded)
 			switch finded {
 			case goon:
 				finded = QualifiedIpAtLevel("region", mipinfo1, startipMap, endipMap)
-				fmt.Println("province finded:", finded)
+				//fmt.Println("province finded:", finded)
 				switch finded {
 				case goon:
-					fmt.Println("this is same network")
+					fmt.Println("this is same network:", ip1_str, ip2_str)
 					SaveSameNetwork(ip1_str, ip2_str, ipinfoMap[ip1_str], resultFP)
 				case leftmove:
 					SaveSameNetwork(ip1_str, mip, ipinfoMap[ip1_str], resultFP)
