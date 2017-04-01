@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"ipconfig"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -62,17 +63,22 @@ func Gen_end_ip(start_ip string, span int64) string {
 	return addr_net.String()
 }
 
-func ParseUrlToMap(url string) (map[string]string, bool) {
+func ParseUrlToMap(ip string) (map[string]string, bool) {
 	t0 := time.Now()
-	response, _ := http.Get(url)
+	url := fmt.Sprintf("http://%s%s%s", ipconfig.Taobaoip[rand.Intn(10000)%2], ipconfig.UrlSuffix, ip)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Host = ipconfig.TaobaoHost
+	resp, _ := http.DefaultClient.Do(req)
+	time.Sleep(1 * time.Second)
 	t2 := time.Now()
-	fmt.Printf("http get took %v to run\n", t2.Sub(t0))
+	fmt.Printf("%s get took %v to run\n", url, t2.Sub(t0))
+	defer resp.Body.Close()
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("!!!!!get panic info, recoverit", r)
 		}
 	}()
-	body, _ := ioutil.ReadAll(response.Body)
+	body, _ := ioutil.ReadAll(resp.Body)
 	var dat map[string]interface{}
 	if err := json.Unmarshal(body, &dat); err == nil {
 		md, ok := dat["data"].(map[string]interface{})
@@ -88,7 +94,10 @@ func ParseUrlToMap(url string) (map[string]string, bool) {
 	}
 	return nil, false
 }
-
+func UsefulInfoForPrint(md map[string]string) string {
+	address := fmt.Sprintf("%s|%s|%s|%s", md["ip"], md["country_id"], md["isp_id"], md["region_id"])
+	return address
+}
 func Format_to_output(md map[string]string) string {
 	address := fmt.Sprintf("%s|%s:%s|%s:%s|%s:%s|%s:%s|%s:%s", md["ip"], md["country"], md["country_id"], md["isp"], md["isp_id"], md["area"], md["area_id"], md["city"], md["city_id"], md["region"], md["region_id"])
 	return address
@@ -115,6 +124,11 @@ func ConstrucIpMapFromStr(ipinfoline string) map[string]string {
 	tempMap["area"] = strings.Split(ipinfo[6], ":")[0]
 	tempMap["city"] = strings.Split(ipinfo[7], ":")[0]
 	tempMap["region"] = strings.Split(strings.TrimSuffix(ipinfo[8], "\n"), ":")[0]
+	tempMap["country_id"] = strings.Split(ipinfo[4], ":")[1]
+	tempMap["isp_id"] = strings.Split(ipinfo[5], ":")[1]
+	tempMap["area_id"] = strings.Split(ipinfo[6], ":")[1]
+	tempMap["city_id"] = strings.Split(ipinfo[7], ":")[1]
+	tempMap["region_id"] = strings.Split(strings.TrimSuffix(ipinfo[8], "\n"), ":")[1]
 
 	return tempMap
 }
@@ -166,21 +180,26 @@ func GetDetectedIpInfo(filename string) map[string]interface{} {
 			continue
 		}
 
-		infoMap[tempMap["ip"]] = tempMap
+		if tempMap["country_id"] != "" {
+			infoMap[tempMap["ip"]] = tempMap
+			infoMap[tempMap["end"]] = tempMap
+		} else {
+			fmt.Println("no country_id", bline)
+		}
 	}
 
 	fmt.Println("total key ", len(infoMap))
 	return infoMap
 }
 func QualifiedIpAtLevel(level string, mipinfoMap, ipstartMap, ipendMap map[string]string) string {
-	ipl := mipinfoMap[level]
+	ipm := mipinfoMap[level]
 	start := ipstartMap[level]
 	end := ipendMap[level]
-	if ipl == start && ipl == end {
+	if ipm == start && ipm == end {
 		return ipconfig.Goon
-	} else if ipl == start && ipl != end {
+	} else if ipm == start && ipm != end {
 		return ipconfig.Leftmove
-	} else if ipl != start && ipl == end {
+	} else if ipm != start && ipm == end {
 		return ipconfig.Rightmove
 	}
 	return ipconfig.Morenetwork

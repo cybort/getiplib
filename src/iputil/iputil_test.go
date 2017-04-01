@@ -35,6 +35,10 @@ func TestIpMap(t *testing.T) {
 
 	line = "154.16.24.56|154.16.24.61|6|154.16.24.56|澳大利亚:AU|:|:|:|:"
 	ipmap = iputil.ConstrucIpMapFromStr(line)
+	usefulInfo := iputil.UsefulInfoForPrint(ipmap)
+	if usefulInfo != "154.16.24.56|AU||" {
+		t.Errorf("want 154.16.24.56|AU|| but get %s", usefulInfo)
+	}
 	if ipmap["ip"] != "154.16.24.56" {
 		t.Errorf("want 154.16.24.56 but get %s", ipmap["ip"])
 	}
@@ -59,4 +63,6 @@ func TestIpMap(t *testing.T) {
 	if ipmap["region"] != "" {
 		t.Errorf("want '' but get %s", ipmap["region"])
 	}
+
+	iputil.GetDetectedIpInfo("../all/same_network.txt")
 }

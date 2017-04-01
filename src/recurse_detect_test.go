@@ -53,5 +53,9 @@ func TestCountry(t *testing.T) {
 	if ret != ipconfig.Rightmove {
 		t.Errorf("want %s , but get %s", ipconfig.Rightmove, ret)
 	}
+	ret = iputil.QualifiedIpAtRegion(ipmap_nan2, ipmap_au, ipmap_us)
+	if ret != ipconfig.Morenetwork {
+		t.Errorf("want %s , but get %s", ipconfig.Rightmove, ret)
+	}
 
 }

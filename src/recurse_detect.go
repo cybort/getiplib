@@ -6,6 +6,7 @@ import (
 	"io"
 	"ipconfig"
 	"iputil"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -29,6 +30,7 @@ const BATCH_NUM = 5
 
 func main() {
 
+	rand.Seed(time.Now().UnixNano())
 	ipinfoMap := iputil.GetDetectedIpInfo(fIpInfo)
 
 	resultFP, err := os.OpenFile(fIpInfo, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
@@ -170,7 +172,7 @@ func start_recurse_detect(startip, endip string, ipinfoMap map[string]interface{
 func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resultFP, middleresultFP *os.File) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("get panic when detected", r)
+			fmt.Println("get panic when detected", r, startip, endip)
 		}
 	}()
 	var startipMap map[string]string
@@ -182,8 +184,7 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 
 	info1, b1 := ipinfoMap[startip]
 	if b1 == false {
-		url1 := fmt.Sprintf("%s%s", taobaoURL, startip)
-		startipMap, _ = iputil.ParseUrlToMap(url1)
+		startipMap, _ = iputil.ParseUrlToMap(startip)
 		ipinfoMap[startip] = startipMap
 		result1 := iputil.Format_to_output(startipMap)
 		middleresultFP.WriteString(startip + "|" + startip + "|1|" + result1 + "\n")
@@ -192,14 +193,13 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 	}
 
 	if startip == endip {
-		SaveSameNetwork(startip, endip, ipinfoMap[startip], resultFP)
+		SaveSameNetwork(startip, endip, startipMap, resultFP)
 		return
 	}
 
 	info2, b2 := ipinfoMap[endip]
 	if b2 == false {
-		url2 := fmt.Sprintf("%s%s", taobaoURL, endip)
-		endipMap, _ = iputil.ParseUrlToMap(url2)
+		endipMap, _ = iputil.ParseUrlToMap(endip)
 		ipinfoMap[endip] = endipMap
 		result2 := iputil.Format_to_output(endipMap)
 		middleresultFP.WriteString(endip + "|" + endip + "|1|" + result2 + "\n")
@@ -212,95 +212,54 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 
 	if ip1 < ip2 {
 		m := (ip1 + ip2) / 2
-		ip1_str := iputil.InetNtoaStr(ip1)
-		ip2_str := iputil.InetNtoaStr(ip2)
 		mip := iputil.InetNtoaStr(m)
+		mip_left := iputil.InetNtoaStr(m - 1)
 		mip_rfirst := iputil.InetNtoaStr(m + 1)
-		fmt.Println("start|middle-ip|end", ip1_str, mip, ip2_str)
-		url1 := fmt.Sprintf("%s%s", taobaoURL, mip)
-		url2 := fmt.Sprintf("%s%s", taobaoURL, mip_rfirst)
-		var mipinfo1 map[string]string
+		fmt.Println("start|middle-ip|end", startip, mip, endip)
+		var mipinfoMap map[string]string
 
 		mipInfo1, exist1 := ipinfoMap[mip]
 		if exist1 == false {
-			mipinfo1, _ = iputil.ParseUrlToMap(url1)
-			ipinfoMap[mip] = mipinfo1
+			mipinfoMap, _ = iputil.ParseUrlToMap(mip)
+			ipinfoMap[mip] = mipinfoMap
 			/*store middle detect result*/
-			result1 := iputil.Format_to_output(mipinfo1)
+			result1 := iputil.Format_to_output(mipinfoMap)
 			middleresultFP.WriteString(mip + "|" + mip + "|1|" + result1 + "\n")
 			middleresultFP.Sync()
 		} else {
-			mipinfo1 = mipInfo1.(map[string]string)
-		}
-
-		_, exist2 := ipinfoMap[mip_rfirst]
-		if exist2 == false {
-			mipinfo2, _ := iputil.ParseUrlToMap(url2)
-			ipinfoMap[mip_rfirst] = mipinfo2
-			result2 := iputil.Format_to_output(mipinfo2)
-			middleresultFP.WriteString(mip_rfirst + "|" + mip_rfirst + "|1|" + result2 + "\n")
-			middleresultFP.Sync()
+			mipinfoMap = mipInfo1.(map[string]string)
 		}
 
 		var finded string
-		//fmt.Println("+++ipinfo1", mipinfo1)
-		//fmt.Println("+++startmap", startipMap)
-		//fmt.Println("+++endipmap", endipMap)
-		finded = iputil.QualifiedIpAtLevel("country", mipinfo1, startipMap, endipMap)
-		//fmt.Println("country finded:", finded)
+		fmt.Println("+++startmap", iputil.UsefulInfoForPrint(startipMap))
+		fmt.Println("+++mipmap", iputil.UsefulInfoForPrint(mipinfoMap))
+		fmt.Println("+++endipmap", iputil.UsefulInfoForPrint(endipMap))
+		finded = iputil.QualifiedIpAtRegion(mipinfoMap, startipMap, endipMap)
+		fmt.Println("detected result:", finded)
 		switch finded {
 		case ipconfig.Goon:
-			finded = iputil.QualifiedIpAtLevel("isp", mipinfo1, startipMap, endipMap)
-			//fmt.Println("isp finded:", finded)
-			switch finded {
-			case ipconfig.Goon:
-				finded = iputil.QualifiedIpAtLevel("region", mipinfo1, startipMap, endipMap)
-				//fmt.Println("province finded:", finded)
-				switch finded {
-				case ipconfig.Goon:
-					fmt.Println("this is same network:", ip1_str, ip2_str)
-					SaveSameNetwork(ip1_str, ip2_str, ipinfoMap[ip1_str], resultFP)
-				case ipconfig.Leftmove:
-					SaveSameNetwork(ip1_str, mip, ipinfoMap[ip1_str], resultFP)
-					CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
-				case ipconfig.Rightmove:
-					SaveSameNetwork(mip_rfirst, ip2_str, ipinfoMap[mip_rfirst], resultFP)
-					CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
-				case ipconfig.Morenetwork:
-					CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
-					CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
-				}
-
-			case ipconfig.Leftmove:
-				SaveSameNetwork(ip1_str, mip, ipinfoMap[ip1_str], resultFP)
-				CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
-			case ipconfig.Rightmove:
-				SaveSameNetwork(mip_rfirst, ip2_str, ipinfoMap[mip_rfirst], resultFP)
-				CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
-			case ipconfig.Morenetwork:
-				CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
-				CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
-			}
-
+			SaveSameNetwork(startip, endip, startipMap, resultFP)
 		case ipconfig.Leftmove:
-			SaveSameNetwork(ip1_str, mip, ipinfoMap[ip1_str], resultFP)
-			CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
+			SaveSameNetwork(startip, mip, startipMap, resultFP)
+			CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP)
 		case ipconfig.Rightmove:
-			SaveSameNetwork(mip_rfirst, ip2_str, ipinfoMap[mip_rfirst], resultFP)
-			CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
+			SaveSameNetwork(mip, endip, mipinfoMap, resultFP)
+			CalcuAndSplit(startip, mip_left, ipinfoMap, resultFP, middleresultFP)
 		case ipconfig.Morenetwork:
-			CalcuAndSplit(ip1_str, mip, ipinfoMap, resultFP, middleresultFP)
-			CalcuAndSplit(mip_rfirst, ip2_str, ipinfoMap, resultFP, middleresultFP)
+			CalcuAndSplit(startip, mip, ipinfoMap, resultFP, middleresultFP)
+			CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP)
 		}
 
+	} else {
+		fmt.Println("ip1 > ip2 , network split failed!!!")
 	}
 }
 
 func SaveSameNetwork(startip, endip string, ipinfoMap interface{}, fileFP *os.File) {
+	fmt.Println("---this is same network---:", startip, endip)
 	ipmap := ipinfoMap.(map[string]string)
 	if ipmap == nil {
-		url := fmt.Sprintf("%s%s", taobaoURL, endip)
-		ipmap, _ = iputil.ParseUrlToMap(url)
+		ipmap, _ = iputil.ParseUrlToMap(endip)
 	}
 	lens := iputil.InetAtonInt(endip) - iputil.InetAtonInt(startip) + 1
 	result := iputil.Format_to_output(ipmap)

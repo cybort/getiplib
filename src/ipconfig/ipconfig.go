@@ -7,6 +7,11 @@ var F_ip_result_detected string = "all/network_detected.txt"
 var F_breakpoint_file string = "etc/breakpoint.info"
 var Taobao_url string = "http://ip.taobao.com/service/getIpInfo.php?ip="
 
+var Taobaoip = [2]string{"140.205.140.33", "42.120.226.92"}
+
+const UrlSuffix = "/service/getIpInfo.php?ip="
+const TaobaoHost = "ip.taobao.com"
+
 const (
 	Goon        = "continue detect"
 	Leftmove    = "left equal, left move to right"
