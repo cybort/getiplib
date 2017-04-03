@@ -13,7 +13,7 @@ const UrlSuffix = "/service/getIpInfo.php?ip="
 const TaobaoHost = "ip.taobao.com"
 
 const (
-	Goon        = "continue detect"
+	Goon        = "same network"
 	Leftmove    = "left equal, left move to right"
 	Rightmove   = "right equal, right move to left"
 	Morenetwork = "!!!more network!!!"

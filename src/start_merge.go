@@ -71,16 +71,6 @@ func sortNetwork(filename string, sortedFile string) {
 		resultFP.WriteString(info)
 	}
 }
-func sortFtpNetwork(filename string, sortedFile string) {
-	iplist := iputil.GetFtpIpInfoSlice(filename)
-	sort.Sort(ByIP(iplist))
-	resultFP, _ := os.Create(sortedFile)
-	defer resultFP.Close()
-	for _, v := range iplist {
-		info := iputil.FtpInfoFormatToOutput(v) + "\n"
-		resultFP.WriteString(info)
-	}
-}
 
 func isSequentail(ipint1, ipint2 int64) bool {
 	return ipint1+1 == ipint2

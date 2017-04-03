@@ -31,7 +31,9 @@ const BATCH_NUM = 5
 func main() {
 
 	rand.Seed(time.Now().UnixNano())
-	ipinfoMap := iputil.GetDetectedIpInfo(fIpInfo)
+	ipinfoMap := make(map[string]interface{})
+	iputil.GetDetectedIpInfo(fIpInfo, ipinfoMap)
+	iputil.GetDetectedIpInfo(fMiddle, ipinfoMap)
 
 	resultFP, err := os.OpenFile(fIpInfo, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
@@ -77,7 +79,7 @@ func main() {
 			println("eorr atoi", e)
 		}
 
-		fmt.Printf("last detect to lineno: %d\n ", last_fileno)
+		//fmt.Printf("last detect to lineno: %d\n ", last_fileno)
 	}
 
 	defer breakpoint_file.Close()
@@ -122,7 +124,7 @@ func main() {
 			breakpoint_file.Truncate(0)
 			breakpoint_file.Seek(0, 0)
 			fmt.Fprintf(breakpoint_file, "%d", fileno)
-			time.Sleep(1 * time.Second)
+			//time.Sleep(1 * time.Second)
 		} else {
 			detect_count += 1
 		}
@@ -162,14 +164,14 @@ func batch_detect(linelist []map[string]string, ipinfoMap map[string]interface{}
 func start_recurse_detect(startip, endip string, ipinfoMap map[string]interface{}, resultFP, middleFP *os.File, fileline int) chan int {
 	result := make(chan int, 1)
 	go func(startip, endip string, ipinfoMap map[string]interface{}, resultFP, middleFP *os.File, fileline int) {
-		CalcuAndSplit(startip, endip, ipinfoMap, resultFP, middleFP)
+		CalcuAndSplit(startip, endip, ipinfoMap, resultFP, middleFP, 1)
 		result <- fileline
 	}(startip, endip, ipinfoMap, resultFP, middleFP, fileline)
 
 	return result
 }
 
-func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resultFP, middleresultFP *os.File) {
+func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resultFP, middleresultFP *os.File, depth int) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("get panic when detected", r, startip, endip)
@@ -178,9 +180,12 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 	var startipMap map[string]string
 	var endipMap map[string]string
 
-	fmt.Println("-------------------------------------------------")
-	fmt.Println("startip|endip|" + startip + "|" + endip)
-	fmt.Println("-------------------------------------------------")
+	var prefix string
+	for i := 0; i <= depth; i++ {
+		prefix = prefix + "+"
+	}
+	prefix = prefix + "|" + strconv.Itoa(depth)
+	fmt.Println(prefix + "|startip|endip|" + startip + "|" + endip)
 
 	info1, b1 := ipinfoMap[startip]
 	if b1 == false {
@@ -215,7 +220,7 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 		mip := iputil.InetNtoaStr(m)
 		mip_left := iputil.InetNtoaStr(m - 1)
 		mip_rfirst := iputil.InetNtoaStr(m + 1)
-		fmt.Println("start|middle-ip|end", startip, mip, endip)
+		fmt.Println(prefix+"|start|middle-ip|end", startip, mip, endip)
 		var mipinfoMap map[string]string
 
 		mipInfo1, exist1 := ipinfoMap[mip]
@@ -230,24 +235,25 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 			mipinfoMap = mipInfo1.(map[string]string)
 		}
 
-		var finded string
-		fmt.Println("+++startmap", iputil.UsefulInfoForPrint(startipMap))
-		fmt.Println("+++mipmap", iputil.UsefulInfoForPrint(mipinfoMap))
-		fmt.Println("+++endipmap", iputil.UsefulInfoForPrint(endipMap))
-		finded = iputil.QualifiedIpAtRegion(mipinfoMap, startipMap, endipMap)
-		fmt.Println("detected result:", finded)
+		startinfo := iputil.UsefulInfoForPrint(startipMap)
+		midinfo := iputil.UsefulInfoForPrint(mipinfoMap)
+		endinfo := iputil.UsefulInfoForPrint(endipMap)
+		fmt.Println("--start|mid|end--", startinfo, midinfo, endinfo)
+
+		finded := iputil.QualifiedIpAtRegion(mipinfoMap, startipMap, endipMap)
+		fmt.Println("[detected result:]", finded)
 		switch finded {
 		case ipconfig.Goon:
 			SaveSameNetwork(startip, endip, startipMap, resultFP)
 		case ipconfig.Leftmove:
 			SaveSameNetwork(startip, mip, startipMap, resultFP)
-			CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP)
+			CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP, depth+1)
 		case ipconfig.Rightmove:
 			SaveSameNetwork(mip, endip, mipinfoMap, resultFP)
-			CalcuAndSplit(startip, mip_left, ipinfoMap, resultFP, middleresultFP)
+			CalcuAndSplit(startip, mip_left, ipinfoMap, resultFP, middleresultFP, depth+1)
 		case ipconfig.Morenetwork:
-			CalcuAndSplit(startip, mip, ipinfoMap, resultFP, middleresultFP)
-			CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP)
+			CalcuAndSplit(startip, mip, ipinfoMap, resultFP, middleresultFP, depth+1)
+			CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP, depth+1)
 		}
 
 	} else {
@@ -256,7 +262,7 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 }
 
 func SaveSameNetwork(startip, endip string, ipinfoMap interface{}, fileFP *os.File) {
-	fmt.Println("---this is same network---:", startip, endip)
+	fmt.Println("---!!!this is same network!!!---:", startip, endip)
 	ipmap := ipinfoMap.(map[string]string)
 	if ipmap == nil {
 		ipmap, _ = iputil.ParseUrlToMap(endip)

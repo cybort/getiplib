@@ -160,14 +160,14 @@ func GetDetectedIpInfoSlice(filename string) []map[string]string {
 	return infoList
 }
 
-func GetDetectedIpInfo(filename string) map[string]interface{} {
+func GetDetectedIpInfo(filename string, infoMap map[string]interface{}) {
 	fp, err := os.Open(filename)
 	if err != nil {
 		fmt.Println("open ipinfo file failed")
-		return nil
+		return
 	}
 	defer fp.Close()
-	infoMap := make(map[string]interface{}, 1)
+	//infoMap := make(map[string]interface{}, 1)
 	br := bufio.NewReader(fp)
 	for {
 		bline, err := br.ReadString('\n')
@@ -189,7 +189,7 @@ func GetDetectedIpInfo(filename string) map[string]interface{} {
 	}
 
 	fmt.Println("total key ", len(infoMap))
-	return infoMap
+
 }
 func QualifiedIpAtLevel(level string, mipinfoMap, ipstartMap, ipendMap map[string]string) string {
 	ipm := mipinfoMap[level]
@@ -206,13 +206,13 @@ func QualifiedIpAtLevel(level string, mipinfoMap, ipstartMap, ipendMap map[strin
 }
 
 func QualifiedIpAtRegion(mipinfoMap, ipstartMap, ipendMap map[string]string) string {
-	country := QualifiedIpAtLevel("country", mipinfoMap, ipstartMap, ipendMap)
+	country := QualifiedIpAtLevel("country_id", mipinfoMap, ipstartMap, ipendMap)
 	switch country {
 	case ipconfig.Goon:
-		isp := QualifiedIpAtLevel("isp", mipinfoMap, ipstartMap, ipendMap)
+		isp := QualifiedIpAtLevel("isp_id", mipinfoMap, ipstartMap, ipendMap)
 		switch isp {
 		case ipconfig.Goon:
-			region := QualifiedIpAtLevel("region", mipinfoMap, ipstartMap, ipendMap)
+			region := QualifiedIpAtLevel("region_id", mipinfoMap, ipstartMap, ipendMap)
 			return region
 		default:
 			return isp
