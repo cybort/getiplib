@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,14 +27,36 @@ var fIpInfo string = "all/same_network.txt"
 
 var taobaoURL string = ipconfig.Taobao_url
 
-const BATCH_NUM = 5
+var fileMutex sync.Mutex
+
+const BATCH_NUM = 10
+
+type MySafeMap struct {
+	infoMap map[string]interface{}
+	Lock    sync.Mutex
+}
+
+func (msm MySafeMap) Get(key string) (interface{}, bool) {
+	msm.Lock.Lock()
+	defer msm.Lock.Unlock()
+	vinfo, exists := msm.infoMap[key]
+	return iputil.DeepCopy(vinfo), exists
+}
+func (msm MySafeMap) Set(key string, value interface{}) {
+	msm.Lock.Lock()
+	msm.infoMap[key] = value
+	msm.Lock.Unlock()
+}
 
 func main() {
 
 	rand.Seed(time.Now().UnixNano())
-	ipinfoMap := make(map[string]interface{})
-	iputil.GetDetectedIpInfo(fIpInfo, ipinfoMap)
-	iputil.GetDetectedIpInfo(fMiddle, ipinfoMap)
+	_ipinfoMap := make(map[string]interface{})
+	iputil.GetDetectedIpInfo(fIpInfo, _ipinfoMap)
+	iputil.GetDetectedIpInfo(fMiddle, _ipinfoMap)
+
+	var ipinfoMap MySafeMap = MySafeMap{}
+	ipinfoMap.infoMap = _ipinfoMap
 
 	resultFP, err := os.OpenFile(fIpInfo, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
@@ -92,8 +115,8 @@ func main() {
 			if err == io.EOF {
 				fmt.Println("reach EOF, detect completed")
 			}
-			fmt.Println("read line failed")
-			return
+			fmt.Println("read line at end")
+			break
 		}
 
 		if isPrefix != false {
@@ -101,7 +124,6 @@ func main() {
 		}
 
 		fileno += 1
-		fmt.Println("fileno", fileno)
 		if fileno <= last_fileno {
 			continue
 		}
@@ -110,7 +132,6 @@ func main() {
 		arr := strings.Split(line, "|")
 		startip := arr[0]
 		endip := strings.TrimSuffix(arr[1], "\n")
-		//CalcuAndSplit(startip, endip, ipinfoMap, resultFP, middleFP)
 		linenum := strconv.Itoa(fileno)
 		tmp := map[string]string{
 			"startip":  startip,
@@ -139,7 +160,7 @@ func main() {
 
 }
 
-func batch_detect(linelist []map[string]string, ipinfoMap map[string]interface{}, resultFP, middleresultFP *os.File) int {
+func batch_detect(linelist []map[string]string, ipinfoMap MySafeMap, resultFP, middleresultFP *os.File) int {
 
 	resultlist := make([]chan int, 0, len(linelist))
 	fmt.Println("-----------------batch start-----------")
@@ -161,9 +182,9 @@ func batch_detect(linelist []map[string]string, ipinfoMap map[string]interface{}
 	return fileno
 }
 
-func start_recurse_detect(startip, endip string, ipinfoMap map[string]interface{}, resultFP, middleFP *os.File, fileline int) chan int {
+func start_recurse_detect(startip, endip string, ipinfoMap MySafeMap, resultFP, middleFP *os.File, fileline int) chan int {
 	result := make(chan int, 1)
-	go func(startip, endip string, ipinfoMap map[string]interface{}, resultFP, middleFP *os.File, fileline int) {
+	go func(startip, endip string, ipinfoMap MySafeMap, resultFP, middleFP *os.File, fileline int) {
 		CalcuAndSplit(startip, endip, ipinfoMap, resultFP, middleFP, 1)
 		result <- fileline
 	}(startip, endip, ipinfoMap, resultFP, middleFP, fileline)
@@ -171,7 +192,7 @@ func start_recurse_detect(startip, endip string, ipinfoMap map[string]interface{
 	return result
 }
 
-func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resultFP, middleresultFP *os.File, depth int) {
+func CalcuAndSplit(startip, endip string, ipinfoMap MySafeMap, resultFP, middleresultFP *os.File, depth int) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("get panic when detected", r, startip, endip)
@@ -187,12 +208,14 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 	prefix = prefix + "|" + strconv.Itoa(depth)
 	fmt.Println(prefix + "|startip|endip|" + startip + "|" + endip)
 
-	info1, b1 := ipinfoMap[startip]
+	info1, b1 := ipinfoMap.Get(startip)
 	if b1 == false {
 		startipMap, _ = iputil.ParseUrlToMap(startip)
-		ipinfoMap[startip] = startipMap
 		result1 := iputil.Format_to_output(startipMap)
+		fileMutex.Lock()
 		middleresultFP.WriteString(startip + "|" + startip + "|1|" + result1 + "\n")
+		fileMutex.Unlock()
+		ipinfoMap.Set(startip, startipMap)
 	} else {
 		startipMap = info1.(map[string]string)
 	}
@@ -202,12 +225,14 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 		return
 	}
 
-	info2, b2 := ipinfoMap[endip]
+	info2, b2 := ipinfoMap.Get(endip)
 	if b2 == false {
 		endipMap, _ = iputil.ParseUrlToMap(endip)
-		ipinfoMap[endip] = endipMap
 		result2 := iputil.Format_to_output(endipMap)
+		fileMutex.Lock()
 		middleresultFP.WriteString(endip + "|" + endip + "|1|" + result2 + "\n")
+		fileMutex.Unlock()
+		ipinfoMap.Set(endip, endipMap)
 	} else {
 		endipMap = info2.(map[string]string)
 	}
@@ -223,14 +248,16 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 		fmt.Println(prefix+"|start|middle-ip|end", startip, mip, endip)
 		var mipinfoMap map[string]string
 
-		mipInfo1, exist1 := ipinfoMap[mip]
+		mipInfo1, exist1 := ipinfoMap.Get(mip)
 		if exist1 == false {
 			mipinfoMap, _ = iputil.ParseUrlToMap(mip)
-			ipinfoMap[mip] = mipinfoMap
-			/*store middle detect result*/
 			result1 := iputil.Format_to_output(mipinfoMap)
+			/*store middle detect result*/
+			fileMutex.Lock()
 			middleresultFP.WriteString(mip + "|" + mip + "|1|" + result1 + "\n")
+			fileMutex.Unlock()
 			middleresultFP.Sync()
+			ipinfoMap.Set(mip, mipinfoMap)
 		} else {
 			mipinfoMap = mipInfo1.(map[string]string)
 		}
@@ -261,14 +288,16 @@ func CalcuAndSplit(startip, endip string, ipinfoMap map[string]interface{}, resu
 	}
 }
 
-func SaveSameNetwork(startip, endip string, ipinfoMap interface{}, fileFP *os.File) {
+func SaveSameNetwork(startip, endip string, oneipMap interface{}, fileFP *os.File) {
 	fmt.Println("---!!!this is same network!!!---:", startip, endip)
-	ipmap := ipinfoMap.(map[string]string)
+	ipmap := oneipMap.(map[string]string)
 	if ipmap == nil {
 		ipmap, _ = iputil.ParseUrlToMap(endip)
 	}
 	lens := iputil.InetAtonInt(endip) - iputil.InetAtonInt(startip) + 1
 	result := iputil.Format_to_output(ipmap)
+	fileMutex.Lock()
 	fileFP.WriteString(startip + "|" + endip + "|" + strconv.Itoa(int(lens)) + "|" + result + "\n")
+	fileMutex.Unlock()
 	fileFP.Sync()
 }
