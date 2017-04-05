@@ -14,22 +14,7 @@ import (
 	"time"
 )
 
-var fileSuffix string = ".again"
-var fProblemIP string = "all/merge_break_ip.txt"
-
-//var fResult string = "all/network_after_split.txt" + fileSuffix
-var fMiddle string = "all/middle_result_store.txt" + fileSuffix
-var f_breakpoint_file string = "all/breakpoint_recurse_again.txt"
-
-var fIpInfo string = "all/same_network.txt"
-
-//var fIpInfo string = ipconfig.F_ip_result_detected
-
-var taobaoURL string = ipconfig.Taobao_url
-
 var fileMutex sync.Mutex
-
-const BATCH_NUM = 10
 
 type MySafeMap struct {
 	infoMap map[string]interface{}
@@ -52,27 +37,28 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 	_ipinfoMap := make(map[string]interface{})
-	iputil.GetDetectedIpInfo(fIpInfo, _ipinfoMap)
-	iputil.GetDetectedIpInfo(fMiddle, _ipinfoMap)
+	iputil.GetDetectedIpInfo(ipconfig.F_Middle, _ipinfoMap)
+	iputil.GetDetectedIpInfo(ipconfig.F_already_IpInfo, _ipinfoMap)
+	iputil.GetDetectedIpInfo(ipconfig.F_same_ip, _ipinfoMap)
 
 	var ipinfoMap MySafeMap = MySafeMap{}
 	ipinfoMap.infoMap = _ipinfoMap
 
-	resultFP, err := os.OpenFile(fIpInfo, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
+	resultFP, err := os.OpenFile(ipconfig.F_same_ip, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		fmt.Println("open result file failed")
 		return
 	}
 	defer resultFP.Close()
 
-	middleFP, err := os.OpenFile(fMiddle, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
+	middleFP, err := os.OpenFile(ipconfig.F_Middle, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		fmt.Println("open middle file failed")
 		return
 	}
 	defer middleFP.Close()
 
-	fileFP, err := os.Open(fProblemIP)
+	fileFP, err := os.Open(ipconfig.F_ip_section_file)
 	if err != nil {
 		fmt.Println("file not exists")
 		return
@@ -82,11 +68,11 @@ func main() {
 
 	var fileno int = 0
 	var last_fileno int = 0
-	breakpoint_file, temp_err := os.OpenFile(f_breakpoint_file, os.O_RDWR, 0666)
+	breakpoint_file, temp_err := os.OpenFile(ipconfig.F_breakpoint_file, os.O_RDWR, 0666)
 	if temp_err != nil {
-		breakpoint_file, temp_err = os.OpenFile(f_breakpoint_file, os.O_RDWR|os.O_CREATE, 0666)
+		breakpoint_file, temp_err = os.OpenFile(ipconfig.F_breakpoint_file, os.O_RDWR|os.O_CREATE, 0666)
 		if temp_err != nil {
-			fmt.Printf("create file %s failed\n", f_breakpoint_file)
+			fmt.Printf("create file %s failed\n", ipconfig.F_breakpoint_file)
 			return
 		}
 		last_fileno = 0
@@ -107,7 +93,7 @@ func main() {
 
 	defer breakpoint_file.Close()
 
-	var batch_iplist [BATCH_NUM]map[string]string
+	var batch_iplist [ipconfig.BATCH_NUM]map[string]string
 	var detect_count int = 0
 	for {
 		bline, isPrefix, err := br.ReadLine()
@@ -139,12 +125,9 @@ func main() {
 			"fileline": linenum,
 		}
 		batch_iplist[detect_count] = tmp
-		if detect_count == BATCH_NUM-1 {
-			batch_detect(batch_iplist[0:], ipinfoMap, resultFP, middleFP)
+		if detect_count == ipconfig.BATCH_NUM-1 {
+			batch_detect(batch_iplist[0:], ipinfoMap, resultFP, middleFP, breakpoint_file)
 			detect_count = 0
-			breakpoint_file.Truncate(0)
-			breakpoint_file.Seek(0, 0)
-			fmt.Fprintf(breakpoint_file, "%d", fileno)
 			//time.Sleep(1 * time.Second)
 		} else {
 			detect_count += 1
@@ -152,15 +135,12 @@ func main() {
 	}
 
 	if detect_count > 0 {
-		lineno := batch_detect(batch_iplist[0:detect_count], ipinfoMap, resultFP, middleFP)
-		breakpoint_file.Truncate(0)
-		breakpoint_file.Seek(0, 0)
-		fmt.Fprintf(breakpoint_file, "%d", lineno)
+		batch_detect(batch_iplist[0:detect_count], ipinfoMap, resultFP, middleFP, breakpoint_file)
 	}
 
 }
 
-func batch_detect(linelist []map[string]string, ipinfoMap MySafeMap, resultFP, middleresultFP *os.File) int {
+func batch_detect(linelist []map[string]string, ipinfoMap MySafeMap, resultFP, middleresultFP, breakpoint_file *os.File) int {
 
 	resultlist := make([]chan int, 0, len(linelist))
 	fmt.Println("-----------------batch start-----------")
@@ -176,6 +156,10 @@ func batch_detect(linelist []map[string]string, ipinfoMap MySafeMap, resultFP, m
 	for _, result_ch := range resultlist {
 		fileno = <-result_ch
 		fmt.Println(" detect line no -----> ", fileno)
+		breakpoint_file.Truncate(0)
+		breakpoint_file.Seek(0, 0)
+		fmt.Fprintf(breakpoint_file, "%d", fileno)
+		breakpoint_file.Sync()
 	}
 	fmt.Println("-----------------batch end-----------")
 
@@ -211,9 +195,8 @@ func CalcuAndSplit(startip, endip string, ipinfoMap MySafeMap, resultFP, middler
 	info1, b1 := ipinfoMap.Get(startip)
 	if b1 == false {
 		startipMap, _ = iputil.ParseUrlToMap(startip)
-		result1 := iputil.Format_to_output(startipMap)
 		fileMutex.Lock()
-		middleresultFP.WriteString(startip + "|" + startip + "|1|" + result1 + "\n")
+		WriteIpinfoToFile(middleresultFP, startip, startip, 1, startipMap)
 		fileMutex.Unlock()
 		ipinfoMap.Set(startip, startipMap)
 	} else {
@@ -228,9 +211,8 @@ func CalcuAndSplit(startip, endip string, ipinfoMap MySafeMap, resultFP, middler
 	info2, b2 := ipinfoMap.Get(endip)
 	if b2 == false {
 		endipMap, _ = iputil.ParseUrlToMap(endip)
-		result2 := iputil.Format_to_output(endipMap)
 		fileMutex.Lock()
-		middleresultFP.WriteString(endip + "|" + endip + "|1|" + result2 + "\n")
+		WriteIpinfoToFile(middleresultFP, endip, endip, 1, endipMap)
 		fileMutex.Unlock()
 		ipinfoMap.Set(endip, endipMap)
 	} else {
@@ -251,10 +233,9 @@ func CalcuAndSplit(startip, endip string, ipinfoMap MySafeMap, resultFP, middler
 		mipInfo1, exist1 := ipinfoMap.Get(mip)
 		if exist1 == false {
 			mipinfoMap, _ = iputil.ParseUrlToMap(mip)
-			result1 := iputil.Format_to_output(mipinfoMap)
 			/*store middle detect result*/
 			fileMutex.Lock()
-			middleresultFP.WriteString(mip + "|" + mip + "|1|" + result1 + "\n")
+			WriteIpinfoToFile(middleresultFP, mip, mip, 1, mipinfoMap)
 			fileMutex.Unlock()
 			middleresultFP.Sync()
 			ipinfoMap.Set(mip, mipinfoMap)
@@ -295,9 +276,13 @@ func SaveSameNetwork(startip, endip string, oneipMap interface{}, fileFP *os.Fil
 		ipmap, _ = iputil.ParseUrlToMap(endip)
 	}
 	lens := iputil.InetAtonInt(endip) - iputil.InetAtonInt(startip) + 1
-	result := iputil.Format_to_output(ipmap)
 	fileMutex.Lock()
-	fileFP.WriteString(startip + "|" + endip + "|" + strconv.Itoa(int(lens)) + "|" + result + "\n")
+	WriteIpinfoToFile(fileFP, startip, endip, int(lens), ipmap)
 	fileMutex.Unlock()
 	fileFP.Sync()
+}
+func WriteIpinfoToFile(fp *os.File, startip, endip string, len int, ipmap map[string]string) {
+	result := iputil.Format_to_output(ipmap)
+	lenstr := strconv.Itoa(len)
+	fp.WriteString(startip + "|" + endip + "|" + lenstr + "|" + result + "\n")
 }

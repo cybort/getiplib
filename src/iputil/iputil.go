@@ -88,7 +88,7 @@ func ParseUrlToMap(ip string) (map[string]string, bool) {
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Host = ipconfig.TaobaoHost
 	resp, _ := http.DefaultClient.Do(req)
-	time.Sleep(1 * time.Second)
+	time.Sleep(200 * time.Millisecond)
 	t2 := time.Now()
 	fmt.Printf("%s get took %v to run\n", url, t2.Sub(t0))
 	defer resp.Body.Close()
@@ -114,7 +114,7 @@ func ParseUrlToMap(ip string) (map[string]string, bool) {
 	return nil, false
 }
 func UsefulInfoForPrint(md map[string]string) string {
-	address := fmt.Sprintf("%s|%s|%s|%s", md["ip"], md["country_id"], md["isp_id"], md["region_id"])
+	address := fmt.Sprintf("%s|%s|%s|%s|%s", md["ip"], md["end"], md["country_id"], md["isp_id"], md["region_id"])
 	return address
 }
 func Format_to_output(md map[string]string) string {
@@ -202,6 +202,20 @@ func GetDetectedIpInfo(filename string, infoMap map[string]interface{}) {
 		if tempMap["country_id"] != "" {
 			infoMap[tempMap["ip"]] = tempMap
 			infoMap[tempMap["end"]] = tempMap
+			//alreay1, bexist := infoMap[tempMap["ip"]]
+			//if bexist == false {
+			//	infoMap[tempMap["ip"]] = tempMap
+			//} else {
+			//	alreay := alreay1.(map[string]string)
+			//	correct_ipinfomap(infoMap, alreay, tempMap)
+			//}
+			//alreay2, bexist2 := infoMap[tempMap["end"]]
+			//if bexist2 == false {
+			//	infoMap[tempMap["end"]] = tempMap
+			//} else {
+			//	already := alreay2.(map[string]string)
+			//	correct_ipinfomap(infoMap, already, tempMap)
+			//}
 		} else {
 			fmt.Println("no country_id", bline)
 		}
@@ -209,6 +223,35 @@ func GetDetectedIpInfo(filename string, infoMap map[string]interface{}) {
 
 	fmt.Println("total key ", len(infoMap))
 
+}
+
+func correct_ipinfomap(infoMap map[string]interface{}, alreay, tempMap map[string]string) {
+	if !same_ipmap(alreay, tempMap) {
+		ip := tempMap["ip"]
+		wireMap, _ := ParseUrlToMap(ip)
+		if same_ipmap(tempMap, wireMap) {
+			infoMap[ip] = tempMap
+			fmt.Println("[alreay not correct] tempMap:", UsefulInfoForPrint(tempMap))
+			fmt.Println("[alreay not correct] alreay:", UsefulInfoForPrint(alreay))
+		} else if same_ipmap(alreay, wireMap) {
+			//infoMap[ip] = wireMap
+			fmt.Println("[==================] alreay with wire:")
+
+		} else {
+			fmt.Println("[11111]alreay in map:", UsefulInfoForPrint(alreay))
+			fmt.Println("[22222]still ip found:", UsefulInfoForPrint(tempMap))
+			fmt.Println("[33333]wire in map:", UsefulInfoForPrint(wireMap))
+		}
+	}
+
+}
+func same_ipmap(map1, map2 map[string]string) bool {
+	//if map1["country_id"] == map2["country_id"] and map1["isp_id"] == map2["isp_id"] and map1["region_id"] == map2["region_id"] {
+
+	if map1["country_id"] == map2["country_id"] {
+		return true
+	}
+	return false
 }
 func QualifiedIpAtLevel(level string, mipinfoMap, ipstartMap, ipendMap map[string]string) string {
 	ipm := mipinfoMap[level]
