@@ -23,15 +23,15 @@ type MySafeMap struct {
 }
 
 func (msm *MySafeMap) Get(key string) (interface{}, bool) {
-	//msm.Lock.Lock()
-	//defer msm.Lock.Unlock()
+	msm.Lock.Lock()
+	defer msm.Lock.Unlock()
 	vinfo, exists := msm.infoMap[key]
 	return vinfo, exists
 }
 func (msm *MySafeMap) Set(key string, value interface{}) {
-	//msm.Lock.Lock()
+	msm.Lock.Lock()
 	msm.infoMap[key] = value
-	//msm.Lock.Unlock()
+	msm.Lock.Unlock()
 }
 
 func main() {
@@ -180,8 +180,7 @@ func GetAndSet(ipinfoMap *MySafeMap, ipstr string, fp *os.File) map[string]strin
 
 	var ipMap map[string]string
 	var _ms bool
-
-	mapMutex.Lock()
+	rtnv := make(map[string]string)
 	info1, b1 := ipinfoMap.Get(ipstr)
 	if b1 == false {
 		ipMap, _ms = iputil.ParseUrlToMap(ipstr)
@@ -189,11 +188,18 @@ func GetAndSet(ipinfoMap *MySafeMap, ipstr string, fp *os.File) map[string]strin
 			WriteIpinfoToFile(fp, ipstr, ipstr, 1, ipMap)
 			ipinfoMap.Set(ipstr, ipMap)
 		}
-	} else {
+	}
+	mapMutex.Lock()
+	defer mapMutex.Unlock()
+	if b1 {
 		ipMap = info1.(map[string]string)
 	}
-	mapMutex.Unlock()
-	return iputil.DeepCopy(ipMap).(map[string]string)
+	e := iputil.DeepCopy(&rtnv, ipMap)
+	if e != nil {
+		fmt.Println("Deepcopy failed", ipMap)
+		return nil
+	}
+	return rtnv
 }
 func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middleresultFP *os.File, depth int) {
 	defer func() {

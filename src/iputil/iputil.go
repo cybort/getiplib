@@ -2,6 +2,8 @@ package iputil
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -62,25 +64,14 @@ func Gen_end_ip(start_ip string, span int64) string {
 	addr_net := InetNtoa(ip_int)
 	return addr_net.String()
 }
-func DeepCopy(value interface{}) interface{} {
-	if valueMap, ok := value.(map[string]interface{}); ok {
-		newMap := make(map[string]interface{})
-		for k, v := range valueMap {
-			newMap[k] = DeepCopy(v)
-		}
-
-		return newMap
-	} else if valueSlice, ok := value.([]interface{}); ok {
-		newSlice := make([]interface{}, len(valueSlice))
-		for k, v := range valueSlice {
-			newSlice[k] = DeepCopy(v)
-		}
-
-		return newSlice
+func DeepCopy(dst, src interface{}) error {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(src); err != nil {
+		return err
 	}
-
-	return value
+	return gob.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(dst)
 }
+
 func ParseUrlToMap(ip string) (map[string]string, bool) {
 	t0 := time.Now()
 	url := fmt.Sprintf("http://%s%s%s", ipconfig.Taobaoip[rand.Intn(10000)%2], ipconfig.UrlSuffix, ip)
