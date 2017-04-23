@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"ipconfig"
 	"iputil"
 	"os"
 	"sort"
@@ -10,7 +11,7 @@ import (
 	"strings"
 )
 
-var detectedIpFile string = "all/same_network.txt"
+var detectedIpFile string = ipconfig.F_same_ip
 var sortedFile string = "all/sorted_ip.txt"
 
 var mergedFile string = "all/merge_result.txt"
@@ -28,6 +29,11 @@ func (obj ByIP) Swap(i, j int) {
 func (obj ByIP) Less(i, j int) bool {
 	len1 := iputil.InetAtonInt(obj[i]["ip"])
 	len2 := iputil.InetAtonInt(obj[j]["ip"])
+	if len1 == len2 {
+		len3 := iputil.InetAtonInt(obj[i]["end"])
+		len4 := iputil.InetAtonInt(obj[j]["end"])
+		return len3 < len4
+	}
 	return len1 < len2
 }
 
@@ -63,12 +69,8 @@ func sortNetwork(filename string, sortedFile string) {
 	resultFP, _ := os.Create(sortedFile)
 	defer resultFP.Close()
 	for _, v := range iplist {
-		info := iputil.Format_to_output(v) + "\n"
-		startip := v["ip"]
-		endip := v["end"]
-		len := v["len"]
-		info = startip + "|" + endip + "|" + len + "|" + info
-		resultFP.WriteString(info)
+		info := iputil.AllKeyInfoFormat_to_output(v)
+		resultFP.WriteString(info + "\n")
 	}
 }
 
@@ -106,13 +108,6 @@ func integrityVerify(filename string) bool {
 }
 
 func EqualOfTwoNetwork(ipMap1, ipMap2 map[string]string) bool {
-	//fmt.Println("*****************************")
-	//fmt.Println(ipMap1)
-	//fmt.Println(ipMap2)
-	//fmt.Println(ipMap1["country"] == ipMap2["country"])
-	//fmt.Println(ipMap1["isp"] == ipMap2["isp"])
-	//fmt.Println(ipMap1["city"] == ipMap2["city"])
-	//fmt.Println("*****************************")
 	var br bool
 	if ipMap1["country"] == ipMap2["country"] && ipMap1["isp"] == ipMap2["isp"] && ipMap1["region"] == ipMap2["region"] {
 		br = true
@@ -145,6 +140,10 @@ func MergeIP(filename, mergedFile, breakFile string) bool {
 		if i == 0 {
 			continue
 		}
+		if current == nil {
+			current = ipMap
+			continue
+		}
 		if ipMap["end"] == "" {
 			ipMap["end"] = ipMap["ip"]
 			ipMap["len"] = "1"
@@ -153,44 +152,50 @@ func MergeIP(filename, mergedFile, breakFile string) bool {
 		testip2 := iputil.InetAtonInt(ipMap["ip"])
 		if testip1 == testip2 {
 			if EqualOfTwoNetwork(current, ipMap) == true {
-				current = ipMap
+				newgInfo := iputil.AllKeyInfoFormat_to_output(current)
+				mergeFP.WriteString(newgInfo + "\n")
 			} else {
-				fmt.Println("ERROR CURR:", current)
-				fmt.Println("ERROR IPMAP:", ipMap)
+				fmt.Println("----ERROR CURR:", current)
+				fmt.Println("----ERROR IPMAP:", ipMap)
 			}
-			current = ipMap
+			if ipMap["ip"] == ipMap["end"] {
+				current = nil
+			} else {
+				newip := iputil.InetAtonInt(ipMap["ip"]) + 1
+				ipMap["ip"] = iputil.InetNtoaStr(newip)
+				newlen, _ := strconv.Atoi(ipMap["len"])
+				ipMap["len"] = strconv.Itoa(newlen - 1)
+				current = ipMap
+			}
 		} else if testip1+1 < testip2 {
 			newgInfo := iputil.AllKeyInfoFormat_to_output(current)
 			mergeFP.WriteString(newgInfo + "\n")
-			ip11 := iputil.InetAtonInt(current["end"]) + 1
-			ip22 := iputil.InetAtonInt(ipMap["ip"]) - 1
-			sip1 := iputil.InetNtoaStr(ip11)
-			sip2 := iputil.InetNtoaStr(ip22)
+
+			sip1 := iputil.InetNtoaStr(testip1 + 1)
+			sip2 := iputil.InetNtoaStr(testip2 - 1)
 			breakFP.WriteString(sip1 + "|" + sip2 + "\n")
 
 			bIntegrity = false
 			current = ipMap
 		} else if testip1+1 > testip2 {
-			current = ipMap
-		} else if testip1+1 == testip2 {
-			if EqualOfTwoNetwork(current, ipMap) == true {
-				//info1 := iputil.AllKeyinfoFormatToOutput(current)
-				//info2 := iputil.AllKeyinfoFormatToOutput(ipMap)
-				//fmt.Println(info1)
-				//fmt.Println(info2)
-				current["end"] = ipMap["end"]
-				l1, _ := strconv.Atoi(current["len"])
-				l2, _ := strconv.Atoi(ipMap["len"])
-				current["len"] = strconv.Itoa(l1 + l2)
+			ipnext := iputil.InetAtonInt(ipMap["ip"])
+			ip11 := iputil.InetAtonInt(current["ip"])
+			if ip11 == ipnext {
+				bIntegrity = false
+				current = ipMap
 			} else {
-				newgInfo := iputil.AllKeyInfoFormat_to_output(current)
-				mergeFP.WriteString(newgInfo + "\n")
-				//fmt.Println("11111 not equal start!!!")
-				//fmt.Println(current)
-				//fmt.Println(ipMap)
-				//fmt.Println("11111 not equal end!!!")
+				ip22 := testip2 - 1
+				sip1 := iputil.InetNtoaStr(ip11)
+				sip2 := iputil.InetNtoaStr(ip22)
+				breakFP.WriteString(sip1 + "|" + sip2 + "\n")
+
+				bIntegrity = false
 				current = ipMap
 			}
+		} else if testip1+1 == testip2 {
+			newgInfo := iputil.AllKeyInfoFormat_to_output(current)
+			mergeFP.WriteString(newgInfo + "\n")
+			current = ipMap
 		}
 	}
 	return bIntegrity

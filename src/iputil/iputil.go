@@ -163,7 +163,11 @@ func GetDetectedIpInfoSlice(filename string) []map[string]string {
 		if tempMap == nil {
 			continue
 		}
-		infoList = append(infoList, tempMap)
+		if tempMap["country_id"] != "" {
+			infoList = append(infoList, tempMap)
+		} else {
+			fmt.Println("no country_id", bline)
+		}
 	}
 
 	fmt.Println("total key ", len(infoList))
