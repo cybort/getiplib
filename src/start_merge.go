@@ -145,57 +145,75 @@ func MergeIP(filename, mergedFile, breakFile string) bool {
 			continue
 		}
 		if ipMap["end"] == "" {
-			ipMap["end"] = ipMap["ip"]
-			ipMap["len"] = "1"
+			//ipMap["end"] = ipMap["ip"]
+			//ipMap["len"] = "1"
+			continue
 		}
 		testip1 := iputil.InetAtonInt(current["end"])
 		testip2 := iputil.InetAtonInt(ipMap["ip"])
+		testip1_beg := iputil.InetAtonInt(current["ip"])
+		testip2_end := iputil.InetAtonInt(ipMap["end"])
 		if testip1 == testip2 {
-			if EqualOfTwoNetwork(current, ipMap) == true {
-				newgInfo := iputil.AllKeyInfoFormat_to_output(current)
-				mergeFP.WriteString(newgInfo + "\n")
-			} else {
-				fmt.Println("----ERROR CURR:", current)
-				fmt.Println("----ERROR IPMAP:", ipMap)
+			if testip1_beg == testip1 {
+
+				if EqualOfTwoNetwork(current, ipMap) == true {
+					current = ipMap
+				} else {
+					newgInfo := iputil.AllKeyInfoFormat_to_output(current)
+					mergeFP.WriteString(newgInfo + "\n")
+
+					newip := iputil.InetAtonInt(ipMap["ip"]) + 1
+					ipMap["ip"] = iputil.InetNtoaStr(newip)
+					newlen, _ := strconv.Atoi(ipMap["len"])
+					ipMap["len"] = strconv.Itoa(newlen - 1)
+					current = ipMap
+				}
+
+			} else if testip2 == testip2_end {
+				if EqualOfTwoNetwork(current, ipMap) == true {
+					continue
+				} else {
+
+					newip := iputil.InetAtonInt(current["end"]) - 1
+					current["end"] = iputil.InetNtoaStr(newip)
+					newlen, _ := strconv.Atoi(ipMap["len"])
+					current["len"] = strconv.Itoa(newlen - 1)
+
+					newgInfo := iputil.AllKeyInfoFormat_to_output(current)
+					mergeFP.WriteString(newgInfo + "\n")
+
+					current = ipMap
+
+				}
+
 			}
-			if ipMap["ip"] == ipMap["end"] {
-				current = nil
-			} else {
-				newip := iputil.InetAtonInt(ipMap["ip"]) + 1
-				ipMap["ip"] = iputil.InetNtoaStr(newip)
-				newlen, _ := strconv.Atoi(ipMap["len"])
-				ipMap["len"] = strconv.Itoa(newlen - 1)
-				current = ipMap
-			}
-		} else if testip1+1 < testip2 {
+		} else if testip1 < testip2 {
+
 			newgInfo := iputil.AllKeyInfoFormat_to_output(current)
 			mergeFP.WriteString(newgInfo + "\n")
-
-			sip1 := iputil.InetNtoaStr(testip1 + 1)
-			sip2 := iputil.InetNtoaStr(testip2 - 1)
-			breakFP.WriteString(sip1 + "|" + sip2 + "\n")
-
-			bIntegrity = false
-			current = ipMap
-		} else if testip1+1 > testip2 {
-			ipnext := iputil.InetAtonInt(ipMap["ip"])
-			ip11 := iputil.InetAtonInt(current["ip"])
-			if ip11 == ipnext {
-				bIntegrity = false
-				current = ipMap
-			} else {
-				ip22 := testip2 - 1
-				sip1 := iputil.InetNtoaStr(ip11)
-				sip2 := iputil.InetNtoaStr(ip22)
+			if testip1+1 < testip2 {
+				sip1 := iputil.InetNtoaStr(testip1 + 1)
+				sip2 := iputil.InetNtoaStr(testip2 - 1)
 				breakFP.WriteString(sip1 + "|" + sip2 + "\n")
 
 				bIntegrity = false
+			}
+			current = ipMap
+		} else {
+			if testip1 > testip2 {
+				// 5, 10
+				// 6 + 8
+				// 6 + 12
+				testip0 := iputil.InetAtonInt(current["ip"])
+				ip22 := testip2
+				if testip0 <= ip22-1 {
+					sip1 := iputil.InetNtoaStr(testip0)
+					sip2 := iputil.InetNtoaStr(ip22 - 1)
+					breakFP.WriteString(sip1 + "|" + sip2 + "\n")
+					bIntegrity = false
+				}
 				current = ipMap
 			}
-		} else if testip1+1 == testip2 {
-			newgInfo := iputil.AllKeyInfoFormat_to_output(current)
-			mergeFP.WriteString(newgInfo + "\n")
-			current = ipMap
 		}
 	}
 	return bIntegrity
@@ -209,52 +227,6 @@ func mergeAdjNetwork(filename string) {
 	}
 }
 
-func ipCheck(filename string) bool {
-	fp, err := os.Open(filename)
-	if err != nil {
-		fmt.Println("open failed")
-		return false
-	}
-	defer fp.Close()
-	br := bufio.NewReader(fp)
-	i := 0
-	var ip string
-	var lens int
-	var lastline string
-	checkResult := true
-	for {
-		line, e := br.ReadString('\n')
-		if e != nil {
-			fmt.Println("end of file")
-			break
-		}
-		info := strings.Split(line, "|")
-		if i == 0 {
-			ip = info[0]
-			lens, _ = strconv.Atoi(info[1])
-			lastline = line
-			i++
-			continue
-		}
-		nextip := info[0]
-		nextlens, _ := strconv.Atoi(info[1])
-		if iputil.InetAtonInt(ip)+int64(lens) == iputil.InetAtonInt(nextip) {
-			ip = nextip
-			lens = nextlens
-		} else {
-			fmt.Printf(lastline)
-			fmt.Printf(line)
-			fmt.Println("----------")
-			checkResult = false
-			ip = nextip
-			lens = nextlens
-		}
-		lastline = line
-
-	}
-
-	return checkResult
-}
 func main() {
 	sortNetwork(detectedIpFile, sortedFile)
 	//sortFtpNetwork("ip_ftp_data_section_file_20150113.txt", "all/sorted_ip_ftp_data.txt")
