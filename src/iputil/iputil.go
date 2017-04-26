@@ -150,6 +150,7 @@ func GetDetectedIpInfoSlice(filename string) []map[string]string {
 		return nil
 	}
 	defer fp.Close()
+	infoMap := make(map[string]interface{})
 	infoList := make([]map[string]string, 0)
 	br := bufio.NewReader(fp)
 	for {
@@ -164,7 +165,20 @@ func GetDetectedIpInfoSlice(filename string) []map[string]string {
 			continue
 		}
 		if tempMap["country_id"] != "" {
-			infoList = append(infoList, tempMap)
+			exMap, exists := infoMap[tempMap["ip"]]
+			if !exists {
+				infoList = append(infoList, tempMap)
+				infoMap[tempMap["ip"]] = tempMap
+			} else {
+				exMap1 := exMap.(map[string]string)
+				curlen, _ := strconv.Atoi(tempMap["len"])
+				exlen, _ := strconv.Atoi(exMap1["len"])
+				if curlen < exlen {
+					infoMap[tempMap["ip"]] = tempMap
+				} else {
+					fmt.Println("ip is repeated and range big", tempMap["ip"], curlen-exlen)
+				}
+			}
 		} else {
 			fmt.Println("no country_id", bline)
 		}
@@ -195,22 +209,20 @@ func GetDetectedIpInfo(filename string, infoMap map[string]interface{}) {
 		}
 
 		if tempMap["country_id"] != "" {
-			infoMap[tempMap["ip"]] = tempMap
-			infoMap[tempMap["end"]] = tempMap
-			//alreay1, bexist := infoMap[tempMap["ip"]]
-			//if bexist == false {
-			//	infoMap[tempMap["ip"]] = tempMap
-			//} else {
-			//	alreay := alreay1.(map[string]string)
-			//	correct_ipinfomap(infoMap, alreay, tempMap)
-			//}
-			//alreay2, bexist2 := infoMap[tempMap["end"]]
-			//if bexist2 == false {
-			//	infoMap[tempMap["end"]] = tempMap
-			//} else {
-			//	already := alreay2.(map[string]string)
-			//	correct_ipinfomap(infoMap, already, tempMap)
-			//}
+			exMap, exists := infoMap[tempMap["ip"]]
+			if !exists {
+				infoMap[tempMap["ip"]] = tempMap
+				infoMap[tempMap["end"]] = tempMap
+			} else {
+				exMap1 := exMap.(map[string]string)
+				curlen, _ := strconv.Atoi(tempMap["len"])
+				exlen, _ := strconv.Atoi(exMap1["len"])
+				if curlen < exlen {
+					delete(infoMap, exMap1["end"])
+					infoMap[tempMap["ip"]] = tempMap
+					infoMap[tempMap["end"]] = tempMap
+				}
+			}
 		} else {
 			fmt.Println("no country_id", bline)
 		}

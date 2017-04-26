@@ -9,12 +9,12 @@ import (
 	"strings"
 )
 
-var fResult string = "all/middle_result_store.txt.again"
+var fResult string = "all/merge_result.txt"
 var ContryFile string = "result/country.txt"
 var IspFile string = "result/isp.txt"
 var AreaFile string = "result/area.txt"
-var CityFile string = "result/City.txt"
-var RegionFile string = "result/Region.txt"
+var CityFile string = "result/city.txt"
+var RegionFile string = "result/province.txt"
 
 func main() {
 	resultFP, err := os.Open(fResult)
@@ -73,7 +73,8 @@ func main() {
 }
 
 func write_iplib_info(filename string, infomap map[string]string) {
-	resultFP, err := os.OpenFile(filename, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
+	//resultFP, err := os.OpenFile(filename, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
+	resultFP, err := os.Create(filename)
 	if err != nil {
 		return
 	}
