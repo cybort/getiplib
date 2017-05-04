@@ -12,9 +12,10 @@ import (
 )
 
 var detectedIpFile string = ipconfig.F_same_ip
+
 var sortedFile string = "all/sorted_ip.txt"
 
-var mergedFile string = "all/merge_result.txt"
+var mergedFile string = "all/merge_result_1.txt"
 var breakFile string = "all/merge_break_ip.txt"
 
 type ByIP []map[string]string
@@ -37,32 +38,6 @@ func (obj ByIP) Less(i, j int) bool {
 	return len1 < len2
 }
 
-func stillNeedDetectIPNum(filename string) int {
-	fp, err := os.Open(filename)
-	if err != nil {
-		fmt.Println("failed")
-		return 0
-	}
-	defer fp.Close()
-
-	br := bufio.NewReader(fp)
-	var count int64 = 0
-	for {
-		line, e := br.ReadString('\n')
-		if e != nil {
-			fmt.Println("read end of file")
-			break
-		}
-		line = strings.TrimSuffix(line, "\n")
-		ipip := strings.Split(line, "|")
-		ip1 := ipip[0]
-		ip2 := ipip[1]
-		count += iputil.InetAtonInt(ip2) - iputil.InetAtonInt(ip1) + 1
-	}
-	//fmt.Printf("still has %d ips", count)
-	return int(count)
-}
-
 func sortNetwork(filename string, sortedFile string) {
 	iplist := iputil.GetDetectedIpInfoSlice(filename)
 	sort.Sort(ByIP(iplist))
@@ -72,39 +47,6 @@ func sortNetwork(filename string, sortedFile string) {
 		info := iputil.AllKeyInfoFormat_to_output(v)
 		resultFP.WriteString(info + "\n")
 	}
-}
-
-func isSequentail(ipint1, ipint2 int64) bool {
-	return ipint1+1 == ipint2
-}
-
-func integrityVerify(filename string) bool {
-	iplist := iputil.GetDetectedIpInfoSlice(filename)
-	bIntegrity := true
-	value := iplist[0]
-	fmt.Println(value)
-	for i, ipMap := range iplist {
-		if i == 0 {
-			continue
-		}
-		if ipMap["end"] == "" {
-			ipMap["end"] = ipMap["ip"]
-			ipMap["len"] = "1"
-		}
-		testip1 := iputil.InetAtonInt(value["end"])
-		testip2 := iputil.InetAtonInt(ipMap["ip"])
-		if isSequentail(testip1, testip2) == false {
-			ip11 := iputil.InetAtonInt(value["end"]) + 1
-			ip22 := iputil.InetAtonInt(ipMap["ip"]) - 1
-			sip1 := iputil.InetNtoaStr(ip11)
-			sip2 := iputil.InetNtoaStr(ip22)
-			fmt.Println(sip1 + "|" + sip2)
-
-			bIntegrity = false
-		}
-		value = ipMap
-	}
-	return bIntegrity
 }
 
 func EqualOfTwoNetwork(ipMap1, ipMap2 map[string]string) bool {
@@ -219,23 +161,8 @@ func MergeIP(filename, mergedFile, breakFile string) bool {
 	return bIntegrity
 }
 
-func mergeAdjNetwork(filename string) {
-	iplist := iputil.GetDetectedIpInfoSlice(filename)
-	for i, ipMap := range iplist {
-		fmt.Println(i)
-		fmt.Println(ipMap)
-	}
-}
-
 func main() {
 	sortNetwork(detectedIpFile, sortedFile)
-	//sortFtpNetwork("ip_ftp_data_section_file_20150113.txt", "all/sorted_ip_ftp_data.txt")
-	//r := ipCheck("all/sorted_ip_ftp_data.txt")
-	//fmt.Println("check", r)
-	//r := integrityVerify(sortedFile)
-	//fmt.Println("intergrity is: ", r)
 	m := MergeIP(sortedFile, mergedFile, breakFile)
 	fmt.Println("intergrity is: ", m)
-	//sum := stillNeedDetectIPNum(breakFile)
-	//fmt.Println("sum:", sum)
 }

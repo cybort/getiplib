@@ -1,13 +1,16 @@
 package ipconfig
 
-var F_ip_section_file string = "all/merge_break_ip.txt"
-var F_same_ip = "all/ip_in_the_same_network.txt"
-var F_ip_result_detected string = "all/network_detected.txt"
+var F_ip_section_file string = "all/continue_detect_ipsection.txt"
+
+var F_same_ip = "all/merge_result.txt"
+
 var F_breakpoint_file string = "all/breakpoint.info"
-var F_already_IpInfo string = "all/uniq_ipinfo.txt.valid"
+
 var F_Middle string = "all/middle_result_store.txt.again"
 
 var Taobao_url string = "http://ip.taobao.com/service/getIpInfo.php?ip="
+
+var F_already_IpInfo string = "all/uniq_ipinfo.txt.valid"
 
 const BATCH_NUM = 100
 

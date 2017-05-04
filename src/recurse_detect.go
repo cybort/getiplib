@@ -266,8 +266,12 @@ func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middle
 func SaveSameNetwork(startip, endip string, oneipMap interface{}, fileFP *os.File) {
 	fmt.Println("---!!!this is same network!!!---:", startip, endip)
 	ipmap := oneipMap.(map[string]string)
-	lens := iputil.InetAtonInt(endip) - iputil.InetAtonInt(startip) + 1
-	WriteIpinfoToFile(fileFP, startip, endip, int(lens), ipmap)
+	_, exists_s := ipmap[startip]
+	_, exists_e := ipmap[endip]
+	if !exists_s && !exists_e {
+		lens := iputil.InetAtonInt(endip) - iputil.InetAtonInt(startip) + 1
+		WriteIpinfoToFile(fileFP, startip, endip, int(lens), ipmap)
+	}
 }
 func WriteIpinfoToFile(fp *os.File, startip, endip string, len int, ipmap map[string]string) {
 	result := iputil.Format_to_output(ipmap)

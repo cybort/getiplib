@@ -108,19 +108,21 @@ func UsefulInfoForPrint(md map[string]string) string {
 	address := fmt.Sprintf("%s|%s|%s|%s|%s", md["ip"], md["end"], md["country_id"], md["isp_id"], md["region_id"])
 	return address
 }
+
 func Format_to_output(md map[string]string) string {
-	address := fmt.Sprintf("%s|%s:%s|%s:%s|%s:%s|%s:%s|%s:%s", md["ip"], md["country"], md["country_id"], md["isp"], md["isp_id"], md["area"], md["area_id"], md["city"], md["city_id"], md["region"], md["region_id"])
+	address := fmt.Sprintf("%s:%s|%s:%s|%s:%s|%s:%s|%s:%s", md["country"], md["country_id"], md["isp"], md["isp_id"], md["area"], md["area_id"], md["city"], md["city_id"], md["region"], md["region_id"])
 	return address
 }
 
 func AllKeyInfoFormat_to_output(md map[string]string) string {
-	address := fmt.Sprintf("%s|%s|%s|%s|%s:%s|%s:%s|%s:%s|%s:%s|%s:%s", md["ip"], md["end"], md["len"], md["ip"], md["country"], md["country_id"], md["isp"], md["isp_id"], md["area"], md["area_id"], md["city"], md["city_id"], md["region"], md["region_id"])
+	suffix := Format_to_output(md)
+	address := fmt.Sprintf("%s|%s|%s|%s", md["ip"], md["end"], md["len"], suffix)
 	return address
 }
 
 func ConstrucIpMapFromStr(ipinfoline string) map[string]string {
 	ipinfo := strings.Split(ipinfoline, "|")
-	if len(ipinfo) < 9 {
+	if len(ipinfo) < 8 {
 		return nil
 	}
 	var tempMap map[string]string = make(map[string]string, 0)
@@ -129,16 +131,16 @@ func ConstrucIpMapFromStr(ipinfoline string) map[string]string {
 	tempMap["end"] = ipinfo[1]
 	tempMap["len"] = ipinfo[2]
 
-	tempMap["country"] = strings.Split(ipinfo[4], ":")[0]
-	tempMap["isp"] = strings.Split(ipinfo[5], ":")[0]
-	tempMap["area"] = strings.Split(ipinfo[6], ":")[0]
-	tempMap["city"] = strings.Split(ipinfo[7], ":")[0]
-	tempMap["region"] = strings.Split(strings.TrimSuffix(ipinfo[8], "\n"), ":")[0]
-	tempMap["country_id"] = strings.Split(ipinfo[4], ":")[1]
-	tempMap["isp_id"] = strings.Split(ipinfo[5], ":")[1]
-	tempMap["area_id"] = strings.Split(ipinfo[6], ":")[1]
-	tempMap["city_id"] = strings.Split(ipinfo[7], ":")[1]
-	tempMap["region_id"] = strings.Split(strings.TrimSuffix(ipinfo[8], "\n"), ":")[1]
+	tempMap["country"] = strings.Split(ipinfo[3], ":")[0]
+	tempMap["isp"] = strings.Split(ipinfo[4], ":")[0]
+	tempMap["area"] = strings.Split(ipinfo[5], ":")[0]
+	tempMap["city"] = strings.Split(ipinfo[6], ":")[0]
+	tempMap["region"] = strings.Split(strings.TrimSuffix(ipinfo[7], "\n"), ":")[0]
+	tempMap["country_id"] = strings.Split(ipinfo[3], ":")[1]
+	tempMap["isp_id"] = strings.Split(ipinfo[4], ":")[1]
+	tempMap["area_id"] = strings.Split(ipinfo[5], ":")[1]
+	tempMap["city_id"] = strings.Split(ipinfo[6], ":")[1]
+	tempMap["region_id"] = strings.Split(strings.TrimSuffix(ipinfo[7], "\n"), ":")[1]
 
 	return tempMap
 }
@@ -195,7 +197,6 @@ func GetDetectedIpInfo(filename string, infoMap map[string]interface{}) {
 		return
 	}
 	defer fp.Close()
-	//infoMap := make(map[string]interface{}, 1)
 	br := bufio.NewReader(fp)
 	for {
 		bline, err := br.ReadString('\n')
@@ -203,6 +204,7 @@ func GetDetectedIpInfo(filename string, infoMap map[string]interface{}) {
 			fmt.Println("reach end of file")
 			break
 		}
+		fmt.Println(bline)
 		tempMap := ConstrucIpMapFromStr(bline)
 		if tempMap == nil {
 			continue
@@ -232,34 +234,6 @@ func GetDetectedIpInfo(filename string, infoMap map[string]interface{}) {
 
 }
 
-func correct_ipinfomap(infoMap map[string]interface{}, alreay, tempMap map[string]string) {
-	if !same_ipmap(alreay, tempMap) {
-		ip := tempMap["ip"]
-		wireMap, _ := ParseUrlToMap(ip)
-		if same_ipmap(tempMap, wireMap) {
-			infoMap[ip] = tempMap
-			fmt.Println("[alreay not correct] tempMap:", UsefulInfoForPrint(tempMap))
-			fmt.Println("[alreay not correct] alreay:", UsefulInfoForPrint(alreay))
-		} else if same_ipmap(alreay, wireMap) {
-			//infoMap[ip] = wireMap
-			fmt.Println("[==================] alreay with wire:")
-
-		} else {
-			fmt.Println("[11111]alreay in map:", UsefulInfoForPrint(alreay))
-			fmt.Println("[22222]still ip found:", UsefulInfoForPrint(tempMap))
-			fmt.Println("[33333]wire in map:", UsefulInfoForPrint(wireMap))
-		}
-	}
-
-}
-func same_ipmap(map1, map2 map[string]string) bool {
-	//if map1["country_id"] == map2["country_id"] and map1["isp_id"] == map2["isp_id"] and map1["region_id"] == map2["region_id"] {
-
-	if map1["country_id"] == map2["country_id"] {
-		return true
-	}
-	return false
-}
 func QualifiedIpAtLevel(level string, mipinfoMap, ipstartMap, ipendMap map[string]string) string {
 	ipm := mipinfoMap[level]
 	start := ipstartMap[level]
