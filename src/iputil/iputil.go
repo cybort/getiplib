@@ -6,9 +6,10 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"github.com/apsdehal/go-logger"
 	"io/ioutil"
 	"ipconfig"
-	"math/rand"
+	//"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +17,9 @@ import (
 	"strings"
 	"time"
 )
+
+func init() {
+}
 
 // Convert uint to net.IP http://www.sharejs.com
 func InetNtoa(ipnr int64) net.IP {
@@ -74,14 +78,14 @@ func DeepCopy(dst, src interface{}) error {
 
 func ParseUrlToMap(ip string) (map[string]string, bool) {
 	t0 := time.Now()
-	url := fmt.Sprintf("http://%s%s%s", ipconfig.Taobaoip[rand.Intn(10000)%2], ipconfig.UrlSuffix, ip)
-	//url := fmt.Sprintf("%s%s", ipconfig.Taobao_url, ip)
+	//url := fmt.Sprintf("http://%s%s%s", ipconfig.Taobaoip[rand.Intn(10000)%2], ipconfig.UrlSuffix, ip)
+	url := fmt.Sprintf("%s%s", ipconfig.Taobao_url, ip)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Host = ipconfig.TaobaoHost
 	resp, _ := http.DefaultClient.Do(req)
 	time.Sleep(200 * time.Millisecond)
 	t2 := time.Now()
-	fmt.Printf("%s get took %v to run\n", url, t2.Sub(t0))
+	fmt.Printf("%s get took %v elapsed\n", url, t2.Sub(t0))
 	defer resp.Body.Close()
 	defer func() {
 		if r := recover(); r != nil {
@@ -145,7 +149,7 @@ func ConstrucIpMapFromStr(ipinfoline string) map[string]string {
 	return tempMap
 }
 
-func GetDetectedIpInfoSlice(filename string) []map[string]string {
+func GetDetectedIpInfoSlice(filename string, log *logger.Logger) []map[string]string {
 	fp, err := os.Open(filename)
 	if err != nil {
 		fmt.Println("open ipinfo file failed")
@@ -158,7 +162,7 @@ func GetDetectedIpInfoSlice(filename string) []map[string]string {
 	for {
 		bline, err := br.ReadString('\n')
 		if err != nil {
-			fmt.Println("reach end of file")
+			log.Debug("reach end of file")
 			break
 		}
 
@@ -178,22 +182,22 @@ func GetDetectedIpInfoSlice(filename string) []map[string]string {
 				if curlen < exlen {
 					infoMap[tempMap["ip"]] = tempMap
 				} else {
-					fmt.Println("ip is repeated and range big", tempMap["ip"], curlen-exlen)
+					log.ErrorF("ip %s is repeated and range %d big", tempMap["ip"], curlen-exlen)
 				}
 			}
 		} else {
-			fmt.Println("no country_id", bline)
+			log.DebugF("no country_id %s", bline)
 		}
 	}
 
-	fmt.Println("total key ", len(infoList))
+	log.InfoF("total key %d", len(infoList))
 	return infoList
 }
 
-func GetDetectedIpInfo(filename string, infoMap map[string]interface{}) {
+func GetDetectedIpInfo(log *logger.Logger, filename string, infoMap map[string]interface{}) {
 	fp, err := os.Open(filename)
 	if err != nil {
-		fmt.Println("open ipinfo file failed")
+		log.Critical("open ipinfo file failed")
 		return
 	}
 	defer fp.Close()
@@ -201,10 +205,9 @@ func GetDetectedIpInfo(filename string, infoMap map[string]interface{}) {
 	for {
 		bline, err := br.ReadString('\n')
 		if err != nil {
-			fmt.Println("reach end of file")
+			log.Debug("reach end of file")
 			break
 		}
-		fmt.Println(bline)
 		tempMap := ConstrucIpMapFromStr(bline)
 		if tempMap == nil {
 			continue
@@ -226,11 +229,11 @@ func GetDetectedIpInfo(filename string, infoMap map[string]interface{}) {
 				}
 			}
 		} else {
-			fmt.Println("no country_id", bline)
+			log.InfoF("no country_id %s", bline)
 		}
 	}
 
-	fmt.Println("total key ", len(infoMap))
+	log.InfoF("total key %d", len(infoMap))
 
 }
 
