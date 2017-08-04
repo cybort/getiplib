@@ -14,9 +14,12 @@ var Taobao_url string = "http://ip.taobao.com/service/getIpInfo.php?ip="
 const BATCH_NUM = 10
 
 var Taobaoip = [2]string{"140.205.140.33", "42.120.226.92"}
+var Alins_arr = [3]string{"203.107.0.208", "121.43.18.42", "101.200.28.73"}
 
 const UrlSuffix = "/service/getIpInfo.php?ip="
 const TaobaoHost = "ip.taobao.com"
+
+const CheckType = ".dns"
 
 const (
 	Goon        = "same network"

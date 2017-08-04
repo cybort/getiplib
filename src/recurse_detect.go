@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"github.com/apsdehal/go-logger"
 	"io"
@@ -9,6 +10,8 @@ import (
 	"iputil"
 	"math/rand"
 	"os"
+	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,27 +45,28 @@ func main() {
 	}
 	rand.Seed(time.Now().UnixNano())
 	_ipinfoMap := make(map[string]interface{})
-	iputil.GetDetectedIpInfo(log, ipconfig.F_Middle, _ipinfoMap)
-	iputil.GetDetectedIpInfo(log, ipconfig.F_verified_same_ipsection, _ipinfoMap)
 	iputil.GetDetectedIpInfo(log, ipconfig.F_need_check_ipsection, _ipinfoMap)
-
+	if ipconfig.CheckType == ".http" {
+		iputil.GetDetectedIpInfo(log, ipconfig.F_Middle+ipconfig.CheckType, _ipinfoMap)
+		iputil.GetDetectedIpInfo(log, ipconfig.F_verified_same_ipsection+ipconfig.CheckType, _ipinfoMap)
+	}
 	var ipinfoMap MySafeMap = MySafeMap{}
 	ipinfoMap.infoMap = _ipinfoMap
 
-	resultFP, err := os.OpenFile(ipconfig.F_verified_same_ipsection, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
+	resultFP, err := os.OpenFile(ipconfig.F_verified_same_ipsection+ipconfig.CheckType, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		fmt.Println("open result file failed")
 		return
 	}
 	defer resultFP.Close()
 
-	middleresultFP, err := os.OpenFile(ipconfig.F_Middle, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
+	middleresultFP, err := os.OpenFile(ipconfig.F_Middle+ipconfig.CheckType, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		fmt.Println("open middle file failed")
 		return
 	}
 
-	notsameFP, err := os.OpenFile(ipconfig.F_not_same_ipsection, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
+	notsameFP, err := os.OpenFile(ipconfig.F_not_same_ipsection+ipconfig.CheckType, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		fmt.Println("open not same file failed")
 		return
@@ -79,11 +83,11 @@ func main() {
 
 	var fileno int = 0
 	var last_fileno int = 0
-	breakpointFP, temp_err := os.OpenFile(ipconfig.F_breakpoint_file, os.O_RDWR, 0666)
+	breakpointFP, temp_err := os.OpenFile(ipconfig.F_breakpoint_file+ipconfig.CheckType, os.O_RDWR, 0666)
 	if temp_err != nil {
-		breakpointFP, temp_err = os.OpenFile(ipconfig.F_breakpoint_file, os.O_RDWR|os.O_CREATE, 0666)
+		breakpointFP, temp_err = os.OpenFile(ipconfig.F_breakpoint_file+ipconfig.CheckType, os.O_RDWR|os.O_CREATE, 0666)
 		if temp_err != nil {
-			fmt.Printf("create file %s failed\n", ipconfig.F_breakpoint_file)
+			fmt.Printf("create file %s failed\n", ipconfig.F_breakpoint_file+ipconfig.CheckType)
 			return
 		}
 		last_fileno = 0
@@ -144,7 +148,11 @@ func main() {
 
 func start_recurse_detect(startip, endip string, ipinfoMap *MySafeMap, resultFP, middleFP, notsameFP *os.File, batch_control chan int, log *logger.Logger) {
 	go func(startip, endip string, ipinfoMap *MySafeMap, resultFP, middleFP, notsameFP *os.File, batch_control chan int, log *logger.Logger) {
-		CalcuAndSplit(startip, endip, ipinfoMap, resultFP, middleFP, notsameFP, 1, log)
+		if ipconfig.CheckType == ".dns" {
+			DnsCheck(startip, endip, ipinfoMap, resultFP, notsameFP, log)
+		} else if ipconfig.CheckType == ".http" {
+			CalcuAndSplit(startip, endip, ipinfoMap, resultFP, middleFP, notsameFP, 1, log)
+		}
 		<-batch_control
 	}(startip, endip, ipinfoMap, resultFP, middleFP, notsameFP, batch_control, log)
 
@@ -233,7 +241,82 @@ func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middle
 		log.Critical("ip1 > ip2 , network split failed!!!")
 	}
 }
+func dig_ecs(alins, ip string) string {
+	cmd := "/home/liuguirong/vendor_probe/dig  @" + alins + " v3.365yg.com.w.kunlungr.com +short  +subnet=" + ip
+	result := exec_shell(cmd)
+	if result == "" {
+		return ""
+	}
+	arr := strings.Split(strings.TrimSuffix(result, "\n"), "\n")
+	sort.Strings(arr)
+	return strings.Join(arr, "|")
+}
 
+func exec_shell(s string) string {
+	cmd := exec.Command("/bin/bash", "-c", s)
+	var out bytes.Buffer
+
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		fmt.Println("exec error", err)
+		return ""
+	}
+	return out.String()
+}
+
+func DnsCheck(startip, endip string, ipinfoMap *MySafeMap, resultFP, notsameFP *os.File, log *logger.Logger) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.WarningF("get panic when detected %s, %s, %s", r, startip, endip)
+		}
+	}()
+	log.Debug("startip|endip|" + startip + "|" + endip)
+
+	_startipMap, b1 := ipinfoMap.Get(startip)
+	if !b1 {
+		log.ErrorF("%s has not ipinfo", startip)
+		return
+	}
+	startipMap := _startipMap.(map[string]string)
+	if startip == endip {
+		SaveSameNetwork(startip, endip, startipMap, ipinfoMap, resultFP, log)
+		return
+	}
+
+	ip1 := iputil.InetAtonInt(startip)
+	ip2 := iputil.InetAtonInt(endip)
+
+	if ip1 < ip2 {
+		m := (ip1 + ip2) / 2
+		mip := iputil.InetNtoaStr(m)
+		query_result1 := dig_ecs(ipconfig.Alins_arr[0], startip)
+		query_result2 := dig_ecs(ipconfig.Alins_arr[1], mip)
+		query_result3 := dig_ecs(ipconfig.Alins_arr[2], endip)
+		startinfo := iputil.UsefulInfoForPrint(startipMap)
+		log.DebugF("%s-%s:%s-%s:%s-%s", startip, query_result1, mip, query_result2, endip, query_result3)
+
+		if query_result1 == "" || query_result2 == "" || query_result3 == "" {
+			log.ErrorF("network %s|%s not in same view", startip, endip)
+			notsameFP.WriteString(startip + "|" + endip + "\n")
+			notsameFP.WriteString("dig:" + startip + ":" + query_result1 + "\n")
+			notsameFP.WriteString("dig:" + mip + ":" + query_result2 + "\n")
+			notsameFP.WriteString("dig:" + endip + ":" + query_result3 + "\n")
+		} else if query_result1 == query_result2 && query_result1 == query_result3 {
+			log.DebugF("same view -start:%s-end:%s-info:%s", startip, endip, startinfo)
+			SaveSameNetwork(startip, endip, startipMap, ipinfoMap, resultFP, log)
+		} else {
+			log.ErrorF("network %s|%s not in same view", startip, endip)
+			notsameFP.WriteString(startip + "|" + endip + "\n")
+			notsameFP.WriteString("dig:" + startip + ":" + query_result1 + "\n")
+			notsameFP.WriteString("dig:" + mip + ":" + query_result2 + "\n")
+			notsameFP.WriteString("dig:" + endip + ":" + query_result3 + "\n")
+		}
+
+	} else {
+		log.Critical("ip1 > ip2 , network split failed!!!")
+	}
+}
 func SaveSameNetwork(startip, endip string, oneipMap interface{}, ipinfoMap *MySafeMap, fileFP *os.File, log *logger.Logger) {
 	ipmap := oneipMap.(map[string]string)
 	//exists_s := ipmap["ip"] == startip
