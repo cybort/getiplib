@@ -21,6 +21,27 @@ import (
 func init() {
 }
 
+type AliIp struct {
+	Code   int `json:"code"`
+	IpInfo `json:"data"`
+}
+
+type IpInfo struct {
+	Ip        string `json:"ip"`
+	Country   string `json:"country"`
+	CountryId string `json:"country_id"`
+	Area      string `json:"area"`
+	AreaId    string `json:"area_id"`
+	Region    string `json:"region"`
+	RegionId  string `json:"region_id"`
+	Isp       string `json:"isp"`
+	IspId     string `json:"isp_id"`
+	City      string `json:"city"`
+	CityId    string `json:"city_id"`
+	County    string `json:"county"`
+	CountyId  string `json:"county_id"`
+}
+
 // Convert uint to net.IP http://www.sharejs.com
 func InetNtoa(ipnr int64) net.IP {
 	var bytes [4]byte
@@ -56,6 +77,10 @@ func InetAton(ipnr net.IP) int64 {
 	return sum
 }
 
+func IpRangeToCidr(startip, endip string) string {
+	return "1"
+}
+
 func InetNtoaStr(intip int64) string {
 	addr_net := InetNtoa(intip)
 	return addr_net.String()
@@ -76,7 +101,7 @@ func DeepCopy(dst, src interface{}) error {
 	return gob.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(dst)
 }
 
-func ParseUrlToMap(ip string) (map[string]string, bool) {
+func ParseUrlToMap(log *logger.Logger, ip string) (map[string]string, bool) {
 	t0 := time.Now()
 	//url := fmt.Sprintf("http://%s%s%s", ipconfig.Taobaoip[rand.Intn(10000)%2], ipconfig.UrlSuffix, ip)
 	url := fmt.Sprintf("%s%s", ipconfig.Taobao_url, ip)
@@ -85,11 +110,11 @@ func ParseUrlToMap(ip string) (map[string]string, bool) {
 	resp, _ := http.DefaultClient.Do(req)
 	time.Sleep(200 * time.Millisecond)
 	t2 := time.Now()
-	fmt.Printf("%s get took %v elapsed\n", url, t2.Sub(t0))
+	log.DebugF("%s get took %v elapsed", url, t2.Sub(t0))
 	defer resp.Body.Close()
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("!!!!!get panic info, recoverit", r)
+			log.ErrorF("!!!!!get panic info, recoverit %s", r)
 		}
 	}()
 	body, _ := ioutil.ReadAll(resp.Body)
@@ -109,18 +134,19 @@ func ParseUrlToMap(ip string) (map[string]string, bool) {
 	return nil, false
 }
 func UsefulInfoForPrint(md map[string]string) string {
-	address := fmt.Sprintf("%s|%s|%s|%s|%s", md["ip"], md["end"], md["country_id"], md["isp_id"], md["region_id"])
+	address := fmt.Sprintf("%s|%s|%s|%s", md["ip"], md["country"], md["region"], md["isp"])
 	return address
 }
 
 func Format_to_output(md map[string]string) string {
-	address := fmt.Sprintf("%s:%s|%s:%s|%s:%s|%s:%s|%s:%s", md["country"], md["country_id"], md["isp"], md["isp_id"], md["area"], md["area_id"], md["city"], md["city_id"], md["region"], md["region_id"])
+	//210.78.22.0|210.78.22.255|210.78.22.0/24|中国 上海市 上海市 联通 华东
+	address := fmt.Sprintf("%s|%s|%s|%s|%s", md["country"], md["region"], md["city"], md["isp"], md["area"])
 	return address
 }
 
 func AllKeyInfoFormat_to_output(md map[string]string) string {
 	suffix := Format_to_output(md)
-	address := fmt.Sprintf("%s|%s|%s|%s", md["ip"], md["end"], md["len"], suffix)
+	address := fmt.Sprintf("%s %s %s %s", md["ip"], md["end"], md["len"], suffix)
 	return address
 }
 
@@ -133,18 +159,13 @@ func ConstrucIpMapFromStr(ipinfoline string) map[string]string {
 
 	tempMap["ip"] = ipinfo[0]
 	tempMap["end"] = ipinfo[1]
-	tempMap["len"] = ipinfo[2]
-
-	tempMap["country"] = strings.Split(ipinfo[3], ":")[0]
-	tempMap["isp"] = strings.Split(ipinfo[4], ":")[0]
-	tempMap["area"] = strings.Split(ipinfo[5], ":")[0]
-	tempMap["city"] = strings.Split(ipinfo[6], ":")[0]
-	tempMap["region"] = strings.Split(strings.TrimSuffix(ipinfo[7], "\n"), ":")[0]
-	tempMap["country_id"] = strings.Split(ipinfo[3], ":")[1]
-	tempMap["isp_id"] = strings.Split(ipinfo[4], ":")[1]
-	tempMap["area_id"] = strings.Split(ipinfo[5], ":")[1]
-	tempMap["city_id"] = strings.Split(ipinfo[6], ":")[1]
-	tempMap["region_id"] = strings.Split(strings.TrimSuffix(ipinfo[7], "\n"), ":")[1]
+	tempMap["cidr"] = ipinfo[2]
+	tempMap["country"] = ipinfo[3]
+	tempMap["region"] = ipinfo[4]
+	tempMap["city"] = ipinfo[5]
+	tempMap["isp"] = ipinfo[6]
+	tempMap["area"] = strings.TrimSuffix(ipinfo[7], "\n")
+	tempMap["len"] = strconv.FormatInt(InetAtonInt(ipinfo[1])-InetAtonInt(ipinfo[0])+1, 10)
 
 	return tempMap
 }
@@ -170,7 +191,7 @@ func GetDetectedIpInfoSlice(filename string, log *logger.Logger) []map[string]st
 		if tempMap == nil {
 			continue
 		}
-		if tempMap["country_id"] != "" {
+		if tempMap["country"] != "" {
 			exMap, exists := infoMap[tempMap["ip"]]
 			if !exists {
 				infoList = append(infoList, tempMap)
@@ -186,7 +207,7 @@ func GetDetectedIpInfoSlice(filename string, log *logger.Logger) []map[string]st
 				}
 			}
 		} else {
-			log.DebugF("no country_id %s", bline)
+			log.DebugF("no country %s", bline)
 		}
 	}
 
@@ -213,23 +234,14 @@ func GetDetectedIpInfo(log *logger.Logger, filename string, infoMap map[string]i
 			continue
 		}
 
-		if tempMap["country_id"] != "" {
-			exMap, exists := infoMap[tempMap["ip"]]
+		if tempMap["country"] != "" {
+			_, exists := infoMap[tempMap["ip"]]
 			if !exists {
 				infoMap[tempMap["ip"]] = tempMap
 				infoMap[tempMap["end"]] = tempMap
-			} else {
-				exMap1 := exMap.(map[string]string)
-				curlen, _ := strconv.Atoi(tempMap["len"])
-				exlen, _ := strconv.Atoi(exMap1["len"])
-				if curlen < exlen {
-					delete(infoMap, exMap1["end"])
-					infoMap[tempMap["ip"]] = tempMap
-					infoMap[tempMap["end"]] = tempMap
-				}
 			}
 		} else {
-			log.InfoF("no country_id %s", bline)
+			log.InfoF("no country %s", bline)
 		}
 	}
 
@@ -252,13 +264,13 @@ func QualifiedIpAtLevel(level string, mipinfoMap, ipstartMap, ipendMap map[strin
 }
 
 func QualifiedIpAtRegion(mipinfoMap, ipstartMap, ipendMap map[string]string) string {
-	country := QualifiedIpAtLevel("country_id", mipinfoMap, ipstartMap, ipendMap)
+	country := QualifiedIpAtLevel("country", mipinfoMap, ipstartMap, ipendMap)
 	switch country {
 	case ipconfig.Goon:
-		isp := QualifiedIpAtLevel("isp_id", mipinfoMap, ipstartMap, ipendMap)
+		isp := QualifiedIpAtLevel("isp", mipinfoMap, ipstartMap, ipendMap)
 		switch isp {
 		case ipconfig.Goon:
-			region := QualifiedIpAtLevel("region_id", mipinfoMap, ipstartMap, ipendMap)
+			region := QualifiedIpAtLevel("region", mipinfoMap, ipstartMap, ipendMap)
 			return region
 		default:
 			return isp

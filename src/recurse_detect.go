@@ -43,13 +43,13 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	_ipinfoMap := make(map[string]interface{})
 	iputil.GetDetectedIpInfo(log, ipconfig.F_Middle, _ipinfoMap)
-	iputil.GetDetectedIpInfo(log, ipconfig.F_already_IpInfo, _ipinfoMap)
-	iputil.GetDetectedIpInfo(log, ipconfig.F_same_ip, _ipinfoMap)
+	iputil.GetDetectedIpInfo(log, ipconfig.F_verified_same_ipsection, _ipinfoMap)
+	iputil.GetDetectedIpInfo(log, ipconfig.F_need_check_ipsection, _ipinfoMap)
 
 	var ipinfoMap MySafeMap = MySafeMap{}
 	ipinfoMap.infoMap = _ipinfoMap
 
-	resultFP, err := os.OpenFile(ipconfig.F_same_ip, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
+	resultFP, err := os.OpenFile(ipconfig.F_verified_same_ipsection, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		fmt.Println("open result file failed")
 		return
@@ -61,9 +61,15 @@ func main() {
 		fmt.Println("open middle file failed")
 		return
 	}
-	defer middleresultFP.Close()
 
-	fileFP, err := os.Open(ipconfig.F_ip_section_file)
+	notsameFP, err := os.OpenFile(ipconfig.F_not_same_ipsection, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		fmt.Println("open not same file failed")
+		return
+	}
+	defer notsameFP.Close()
+
+	fileFP, err := os.Open(ipconfig.F_need_check_ipsection)
 	if err != nil {
 		fmt.Println("file not exists")
 		return
@@ -124,7 +130,7 @@ func main() {
 		endip := strings.TrimSuffix(arr[1], "\n")
 
 		batch_control <- 1
-		start_recurse_detect(startip, endip, &ipinfoMap, resultFP, middleresultFP, batch_control, log)
+		start_recurse_detect(startip, endip, &ipinfoMap, resultFP, middleresultFP, notsameFP, batch_control, log)
 		breakpointFP.Truncate(0)
 		breakpointFP.Seek(0, 0)
 		log.DebugF("line no--- %d", fileno)
@@ -133,26 +139,26 @@ func main() {
 	}
 
 	log.Warning("process will exit in 3 minutes...")
-	time.Sleep(1 * 60 * time.Second)
+	time.Sleep(3 * 60 * time.Second)
 }
 
-func start_recurse_detect(startip, endip string, ipinfoMap *MySafeMap, resultFP, middleFP *os.File, batch_control chan int, log *logger.Logger) {
-	go func(startip, endip string, ipinfoMap *MySafeMap, resultFP, middleFP *os.File, batch_control chan int, log *logger.Logger) {
-		CalcuAndSplit(startip, endip, ipinfoMap, resultFP, middleFP, 1, log)
+func start_recurse_detect(startip, endip string, ipinfoMap *MySafeMap, resultFP, middleFP, notsameFP *os.File, batch_control chan int, log *logger.Logger) {
+	go func(startip, endip string, ipinfoMap *MySafeMap, resultFP, middleFP, notsameFP *os.File, batch_control chan int, log *logger.Logger) {
+		CalcuAndSplit(startip, endip, ipinfoMap, resultFP, middleFP, notsameFP, 1, log)
 		<-batch_control
-	}(startip, endip, ipinfoMap, resultFP, middleFP, batch_control, log)
+	}(startip, endip, ipinfoMap, resultFP, middleFP, notsameFP, batch_control, log)
 
 }
-func GetAndSet(log *logger.Logger, ipinfoMap *MySafeMap, ipstr string, fp *os.File) map[string]string {
+func GetAndSet(log *logger.Logger, ipinfoMap *MySafeMap, ipstr string, middleFP *os.File) map[string]string {
 
 	var ipMap map[string]string
 	var _ms bool
 	rtnv := make(map[string]string)
 	info1, b1 := ipinfoMap.Get(ipstr)
 	if b1 == false {
-		ipMap, _ms = iputil.ParseUrlToMap(ipstr)
+		ipMap, _ms = iputil.ParseUrlToMap(log, ipstr)
 		if _ms {
-			WriteIpinfoToFile(fp, ipstr, ipstr, 1, ipMap)
+			WriteIpinfoToFile(middleFP, ipstr, ipstr, 1, ipMap)
 			ipinfoMap.Set(ipstr, ipMap)
 		} else {
 			log.ErrorF("http get %s from taobao iplib failed", ipstr)
@@ -171,7 +177,7 @@ func GetAndSet(log *logger.Logger, ipinfoMap *MySafeMap, ipstr string, fp *os.Fi
 	}
 	return rtnv
 }
-func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middleresultFP *os.File, depth int, log *logger.Logger) {
+func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middleresultFP, notsameFP *os.File, depth int, log *logger.Logger) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.WarningF("get panic when detected %s, %s, %s", r, startip, endip)
@@ -200,8 +206,6 @@ func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middle
 	if ip1 < ip2 {
 		m := (ip1 + ip2) / 2
 		mip := iputil.InetNtoaStr(m)
-		//mip_left := iputil.InetNtoaStr(m - 1)
-		//mip_rfirst := iputil.InetNtoaStr(m + 1)
 		var mipinfoMap map[string]string
 
 		mipinfoMap = GetAndSet(log, ipinfoMap, mip, middleresultFP)
@@ -214,25 +218,19 @@ func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middle
 		log.DebugF(prefix+"---end:%s-info:%s", endip, endinfo)
 
 		finded := iputil.QualifiedIpAtRegion(mipinfoMap, startipMap, endipMap)
-		log.DebugF("[detected result: %s]", finded)
+		log.NoticeF("[detected result: %s, %s|%s|%s]", finded, startip, mip, endip)
 		switch finded {
 		case ipconfig.Goon:
 			SaveSameNetwork(startip, endip, startipMap, ipinfoMap, resultFP, log)
 		default:
 			log.ErrorF("network %s|%s not in same view", startip, endip)
-			//case ipconfig.Leftmove:
-			//	SaveSameNetwork(startip, mip, startipMap, resultFP)
-			//	CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP, depth+1)
-			//case ipconfig.Rightmove:
-			//	SaveSameNetwork(mip, endip, mipinfoMap, resultFP)
-			//	CalcuAndSplit(startip, mip_left, ipinfoMap, resultFP, middleresultFP, depth+1)
-			//case ipconfig.Morenetwork:
-			//	CalcuAndSplit(startip, mip, ipinfoMap, resultFP, middleresultFP, depth+1)
-			//	CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP, depth+1)
+			notsameFP.WriteString(startinfo + "-" + endinfo + "\n")
+			//CalcuAndSplit(startip, mip, ipinfoMap, resultFP, middleresultFP,notsameFP, depth+1)
+			//CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP,notsameFP, depth+1)
 		}
 
 	} else {
-		fmt.Println("ip1 > ip2 , network split failed!!!")
+		log.Critical("ip1 > ip2 , network split failed!!!")
 	}
 }
 
@@ -245,7 +243,7 @@ func SaveSameNetwork(startip, endip string, oneipMap interface{}, ipinfoMap *MyS
 	if exists_s && exists_e {
 		lens := iputil.InetAtonInt(endip) - iputil.InetAtonInt(startip) + 1
 		WriteIpinfoToFile(fileFP, startip, endip, int(lens), ipmap)
-		log.InfoF("---!!!this is same network %s|%s!!!---:", startip, endip)
+		log.NoticeF("---!!!this is same network %s|%s!!!---:", startip, endip)
 	} else {
 		if !exists_s {
 			log.ErrorF("startip %s no location info", startip)
@@ -255,11 +253,11 @@ func SaveSameNetwork(startip, endip string, oneipMap interface{}, ipinfoMap *MyS
 		}
 	}
 }
-func WriteIpinfoToFile(fp *os.File, startip, endip string, len int, ipmap map[string]string) {
+func WriteIpinfoToFile(middleFP *os.File, startip, endip string, len int, ipmap map[string]string) {
 	result := iputil.Format_to_output(ipmap)
 	lenstr := strconv.Itoa(len)
 	fileMutex.Lock()
-	fp.WriteString(startip + "|" + endip + "|" + lenstr + "|" + result + "\n")
+	middleFP.WriteString(startip + "|" + endip + "|" + lenstr + "|" + result + "\n")
 	fileMutex.Unlock()
-	fp.Sync()
+	middleFP.Sync()
 }

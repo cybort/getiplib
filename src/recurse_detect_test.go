@@ -1,12 +1,34 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"ipconfig"
 	"iputil"
+	"net/http"
 	"testing"
 )
 
-func TestCountry(t *testing.T) {
+func TestTaobaoIp(t *testing.T) {
+	ip := "203.119.80.11"
+	url := fmt.Sprintf("%s%s", ipconfig.Taobao_url, ip)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Host = ipconfig.TaobaoHost
+	resp, _ := http.DefaultClient.Do(req)
+	body, _ := ioutil.ReadAll(resp.Body)
+	dat := iputil.AliIp{}
+	if err := json.Unmarshal(body, &dat); err == nil {
+		fmt.Printf("%+v\n", dat)
+		fmt.Printf("%s\n", dat.Ip)
+		fmt.Printf("%s\n", dat.Country)
+
+	} else {
+		fmt.Println(err)
+	}
+}
+
+func invalidtestCountry(t *testing.T) {
 	var bline_us string = "150.242.5.255|150.242.5.255|1|150.242.5.255|中国:CN|中国科技网:1000114|华北:100000|北京市:110100|北京市:110000"
 	var bline_nan1 string = "150.242.6.255|150.242.6.255|1|150.242.6.255|中国:CN|中国电信:1000115|华北:100000|北京市:110100|天津市:110002"
 	var bline_au string = "150.242.7.255|150.242.7.255|1|150.242.7.255|中国:CN|中国联通:1000115|华北:100000|北京市:110100|北京市:110000"
