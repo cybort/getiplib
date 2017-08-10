@@ -298,12 +298,13 @@ func QualifiedIpAtRegion(mipinfoMap, ipstartMap, ipendMap map[string]string) str
 		switch isp {
 		case ipconfig.Goon:
 			region := QualifiedIpAtLevel("region", mipinfoMap, ipstartMap, ipendMap)
-			switch region {
-			case ipconfig.Goon:
-				return QualifiedIpAtLevel("city", mipinfoMap, ipstartMap, ipendMap)
-			default:
-				return region
-			}
+			return region
+			//switch region {
+			//case ipconfig.Goon:
+			//	return QualifiedIpAtLevel("city", mipinfoMap, ipstartMap, ipendMap)
+			//default:
+			//	return region
+			//}
 		default:
 			return isp
 		}
