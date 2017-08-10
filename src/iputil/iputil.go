@@ -124,7 +124,12 @@ func ParseUrlToMap(log *logger.Logger, ip string) (map[string]string, bool) {
 		if ok {
 			rtnValue := make(map[string]string)
 			for k, v := range md {
-				rtnValue[k] = v.(string)
+				vv := v.(string)
+				if vv == "" {
+					rtnValue[k] = "*"
+				} else {
+					rtnValue[k] = vv
+				}
 			}
 			return rtnValue, true
 		}
@@ -134,7 +139,7 @@ func ParseUrlToMap(log *logger.Logger, ip string) (map[string]string, bool) {
 	return nil, false
 }
 func UsefulInfoForPrint(md map[string]string) string {
-	address := fmt.Sprintf("%s|%s|%s|%s", md["ip"], md["country"], md["region"], md["isp"])
+	address := fmt.Sprintf("%s|%s|%s|%s", md["country"], md["region"], md["city"], md["isp"])
 	return address
 }
 
@@ -160,11 +165,33 @@ func ConstrucIpMapFromStr(ipinfoline string) map[string]string {
 	tempMap["ip"] = ipinfo[0]
 	tempMap["end"] = ipinfo[1]
 	tempMap["cidr"] = ipinfo[2]
-	tempMap["country"] = ipinfo[3]
-	tempMap["region"] = ipinfo[4]
-	tempMap["city"] = ipinfo[5]
-	tempMap["isp"] = ipinfo[6]
-	tempMap["area"] = strings.TrimSuffix(ipinfo[7], "\n")
+
+	if ipinfo[3] == "" {
+		tempMap["country"] = "*"
+	} else {
+		tempMap["country"] = ipinfo[3]
+	}
+	if ipinfo[4] == "" {
+		tempMap["region"] = "*"
+	} else {
+		tempMap["region"] = ipinfo[4]
+	}
+	if ipinfo[5] == "" {
+		tempMap["city"] = "*"
+	} else {
+		tempMap["city"] = ipinfo[5]
+	}
+	if ipinfo[6] == "" {
+		tempMap["isp"] = "*"
+	} else {
+		tempMap["isp"] = ipinfo[6]
+	}
+	area := strings.TrimSuffix(ipinfo[7], "\n")
+	if area == "" {
+		tempMap["area"] = "*"
+	} else {
+		tempMap["area"] = area
+	}
 	tempMap["len"] = strconv.FormatInt(InetAtonInt(ipinfo[1])-InetAtonInt(ipinfo[0])+1, 10)
 
 	return tempMap
@@ -238,7 +265,7 @@ func GetDetectedIpInfo(log *logger.Logger, filename string, infoMap map[string]i
 			_, exists := infoMap[tempMap["ip"]]
 			if !exists {
 				infoMap[tempMap["ip"]] = tempMap
-				infoMap[tempMap["end"]] = tempMap
+				//infoMap[tempMap["end"]] = tempMap
 			}
 		} else {
 			log.InfoF("no country %s", bline)
@@ -271,7 +298,12 @@ func QualifiedIpAtRegion(mipinfoMap, ipstartMap, ipendMap map[string]string) str
 		switch isp {
 		case ipconfig.Goon:
 			region := QualifiedIpAtLevel("region", mipinfoMap, ipstartMap, ipendMap)
-			return region
+			switch region {
+			case ipconfig.Goon:
+				return QualifiedIpAtLevel("city", mipinfoMap, ipstartMap, ipendMap)
+			default:
+				return region
+			}
 		default:
 			return isp
 		}

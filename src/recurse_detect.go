@@ -9,9 +9,11 @@ import (
 	"iputil"
 	"math/rand"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -35,6 +37,16 @@ func (msm *MySafeMap) Set(key string, value interface{}) {
 	msm.Lock.Unlock()
 }
 
+func signalListen(c chan os.Signal) {
+	signal.Notify(c, syscall.SIGINT)
+	signal.Notify(c, syscall.SIGTERM)
+	for {
+		s := <-c
+		//收到信号后的处理，这里只是输出信号内容，可以做一些更有意思的事
+		fmt.Println("get signal:", s)
+		break
+	}
+}
 func main() {
 	log, err := logger.New("test", 1, os.Stdout)
 	if err != nil {
@@ -215,16 +227,18 @@ func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middle
 		endinfo := iputil.UsefulInfoForPrint(endipMap)
 		log.DebugF(prefix+"-start:%s-info:%s", startip, startinfo)
 		log.DebugF(prefix+"-middl:%s-info:%s", mip, midinfo)
-		log.DebugF(prefix+"---end:%s-info:%s", endip, endinfo)
+		log.DebugF(prefix+"@@@@-start:%s-info:%+v", startip, startipMap)
+		log.DebugF(prefix+"@@@@-middle:%s-info:%+v", mip, mipinfoMap)
+		log.DebugF(prefix+"@@@@-end:%s-info:%+v", endip, endipMap)
 
 		finded := iputil.QualifiedIpAtRegion(mipinfoMap, startipMap, endipMap)
-		log.NoticeF("[detected result: %s, %s|%s|%s]", finded, startip, mip, endip)
+		log.NoticeF("[detected result: %s, %s|%s|%s|%s|%s]", finded, startip, mip, endip, startinfo, endinfo)
 		switch finded {
 		case ipconfig.Goon:
 			SaveSameNetwork(startip, endip, startipMap, ipinfoMap, resultFP, log)
 		default:
 			log.ErrorF("network %s|%s not in same view", startip, endip)
-			notsameFP.WriteString(startinfo + "-" + endinfo + "\n")
+			notsameFP.WriteString(startip + "|" + endip + "|" + startinfo + "-" + endinfo + "\n")
 			//CalcuAndSplit(startip, mip, ipinfoMap, resultFP, middleresultFP,notsameFP, depth+1)
 			//CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP,notsameFP, depth+1)
 		}
@@ -236,8 +250,6 @@ func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middle
 
 func SaveSameNetwork(startip, endip string, oneipMap interface{}, ipinfoMap *MySafeMap, fileFP *os.File, log *logger.Logger) {
 	ipmap := oneipMap.(map[string]string)
-	//exists_s := ipmap["ip"] == startip
-	//exists_e := ipmap["end"] == endip
 	_, exists_s := ipinfoMap.Get(startip)
 	_, exists_e := ipinfoMap.Get(endip)
 	if exists_s && exists_e {
