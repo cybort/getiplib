@@ -265,7 +265,7 @@ func GetDetectedIpInfo(log *logger.Logger, filename string, infoMap map[string]i
 			_, exists := infoMap[tempMap["ip"]]
 			if !exists {
 				infoMap[tempMap["ip"]] = tempMap
-				//infoMap[tempMap["end"]] = tempMap
+				infoMap[tempMap["end"]] = tempMap
 			}
 		} else {
 			log.InfoF("no country %s", bline)

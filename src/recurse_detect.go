@@ -56,7 +56,6 @@ func main() {
 	_ipinfoMap := make(map[string]interface{})
 	iputil.GetDetectedIpInfo(log, ipconfig.F_Middle, _ipinfoMap)
 	iputil.GetDetectedIpInfo(log, ipconfig.F_verified_same_ipsection, _ipinfoMap)
-	//iputil.GetDetectedIpInfo(log, ipconfig.F_need_check_ipsection, _ipinfoMap)
 
 	var ipinfoMap MySafeMap = MySafeMap{}
 	ipinfoMap.infoMap = _ipinfoMap
@@ -218,16 +217,14 @@ func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middle
 	if ip1 < ip2 {
 		m := (ip1 + ip2) / 2
 		mip := iputil.InetNtoaStr(m)
-		mip_rfirst := iputil.InetNtoaStr(m + 1)
+		//mip_rfirst := iputil.InetNtoaStr(m + 1)
 		var mipinfoMap map[string]string
 
 		mipinfoMap = GetAndSet(log, ipinfoMap, mip, middleresultFP)
 
 		startinfo := iputil.UsefulInfoForPrint(startipMap)
-		midinfo := iputil.UsefulInfoForPrint(mipinfoMap)
+		//midinfo := iputil.UsefulInfoForPrint(mipinfoMap)
 		endinfo := iputil.UsefulInfoForPrint(endipMap)
-		log.DebugF(prefix+"-start:%s-info:%s", startip, startinfo)
-		log.DebugF(prefix+"-middl:%s-info:%s", mip, midinfo)
 		log.DebugF(prefix+"@@@@-start:%s-info:%+v", startip, startipMap)
 		log.DebugF(prefix+"@@@@-middle:%s-info:%+v", mip, mipinfoMap)
 		log.DebugF(prefix+"@@@@-end:%s-info:%+v", endip, endipMap)
@@ -239,9 +236,9 @@ func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middle
 			SaveSameNetwork(startip, endip, startipMap, ipinfoMap, resultFP, log)
 		default:
 			log.ErrorF("network %s|%s not in same view", startip, endip)
-			//notsameFP.WriteString(startip + "|" + endip + "|" + startinfo + "-" + endinfo + "\n")
-			CalcuAndSplit(startip, mip, ipinfoMap, resultFP, middleresultFP, notsameFP, depth+1, log)
-			CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP, notsameFP, depth+1, log)
+			notsameFP.WriteString(startip + "|" + endip + "|" + startinfo + "-" + endinfo + "\n")
+			//CalcuAndSplit(startip, mip, ipinfoMap, resultFP, middleresultFP, notsameFP, depth+1, log)
+			//CalcuAndSplit(mip_rfirst, endip, ipinfoMap, resultFP, middleresultFP, notsameFP, depth+1, log)
 		}
 
 	} else {

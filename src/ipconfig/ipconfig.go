@@ -1,15 +1,13 @@
 package ipconfig
 
-var F_need_check_ipsection string = "all/need_checking.ipsection"
-
-var F_verified_same_ipsection = "all/verified_result.ipsection"
-var F_Middle string = "all/middle_result_store.txt"
-
-var F_not_same_ipsection = "all/not_same.ipsection"
-
-var F_breakpoint_file string = "all/breakpoint.info"
-
-var Taobao_url string = "http://ip.taobao.com/service/getIpInfo.php?ip="
+var (
+	F_need_check_ipsection    = "all/need_checking.ipsection" + ".temp"
+	F_verified_same_ipsection = "all/verified_result.ipsection" + ".temp"
+	F_Middle                  = "all/middle_result_store.txt" + ".temp"
+	F_not_same_ipsection      = "all/not_same.ipsection" + ".temp"
+	F_breakpoint_file         = "all/breakpoint.info" + ".temp"
+	Taobao_url                = "http://ip.taobao.com/service/getIpInfo.php?ip="
+)
 
 const BATCH_NUM = 10
 
