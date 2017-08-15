@@ -101,43 +101,32 @@ func DeepCopy(dst, src interface{}) error {
 	return gob.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(dst)
 }
 
-func ParseUrlToMap(log *logger.Logger, ip string) (map[string]string, bool) {
+func ParseUrlToMap(log *logger.Logger, taobaoUrl, ip string) (*AliIp, bool) {
 	t0 := time.Now()
-	//url := fmt.Sprintf("http://%s%s%s", ipconfig.Taobaoip[rand.Intn(10000)%2], ipconfig.UrlSuffix, ip)
-	url := fmt.Sprintf("%s%s", ipconfig.Taobao_url, ip)
+	url := fmt.Sprintf("%s%s", taobaoUrl, ip)
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Host = ipconfig.TaobaoHost
 	resp, _ := http.DefaultClient.Do(req)
 	time.Sleep(200 * time.Millisecond)
 	t2 := time.Now()
-	log.DebugF("%s get took %v elapsed", url, t2.Sub(t0))
+	if log != nil {
+		log.DebugF("%s get took %v elapsed", url, t2.Sub(t0))
+	}
 	defer resp.Body.Close()
 	defer func() {
 		if r := recover(); r != nil {
-			log.ErrorF("!!!!!get panic info, recoverit %s", r)
+			if log != nil {
+				log.ErrorF("!!!!!get panic info, recoverit %s", r)
+			}
 		}
 	}()
 	body, _ := ioutil.ReadAll(resp.Body)
-	var dat map[string]interface{}
-	if err := json.Unmarshal(body, &dat); err == nil {
-		md, ok := dat["data"].(map[string]interface{})
-		if ok {
-			rtnValue := make(map[string]string)
-			for k, v := range md {
-				vv := v.(string)
-				if vv == "" {
-					rtnValue[k] = "*"
-				} else {
-					rtnValue[k] = vv
-				}
-			}
-			return rtnValue, true
-		}
-
-		return nil, false
+	dat := new(AliIp)
+	if err := json.Unmarshal(body, dat); err == nil {
+		return dat, true
 	}
 	return nil, false
 }
+
 func UsefulInfoForPrint(md map[string]string) string {
 	address := fmt.Sprintf("%s|%s|%s|%s", md["country"], md["region"], md["city"], md["isp"])
 	return address
