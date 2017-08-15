@@ -15,7 +15,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func init() {
@@ -86,7 +85,7 @@ func InetNtoaStr(intip int64) string {
 	return addr_net.String()
 }
 
-func Gen_end_ip(start_ip string, span int64) string {
+func GenEndIp(start_ip string, span int64) string {
 	addr := net.ParseIP(start_ip)
 	ip_int := InetAton(addr)
 	ip_int += span - 1
@@ -101,16 +100,13 @@ func DeepCopy(dst, src interface{}) error {
 	return gob.NewDecoder(bytes.NewBuffer(buf.Bytes())).Decode(dst)
 }
 
-func ParseUrlToMap(log *logger.Logger, ip string) (map[string]string, bool) {
-	t0 := time.Now()
-	//url := fmt.Sprintf("http://%s%s%s", ipconfig.Taobaoip[rand.Intn(10000)%2], ipconfig.UrlSuffix, ip)
-	url := fmt.Sprintf("%s%s", ipconfig.Taobao_url, ip)
+func ParseUrlToMap(log *logger.Logger, taobaoUrl, ip string) (map[string]string, bool) {
+	url := fmt.Sprintf("%s%s", taobaoUrl, ip)
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Host = ipconfig.TaobaoHost
-	resp, _ := http.DefaultClient.Do(req)
-	time.Sleep(200 * time.Millisecond)
-	t2 := time.Now()
-	log.DebugF("%s get took %v elapsed", url, t2.Sub(t0))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, false
+	}
 	defer resp.Body.Close()
 	defer func() {
 		if r := recover(); r != nil {
@@ -139,20 +135,17 @@ func ParseUrlToMap(log *logger.Logger, ip string) (map[string]string, bool) {
 	return nil, false
 }
 func UsefulInfoForPrint(md map[string]string) string {
-	address := fmt.Sprintf("%s|%s|%s|%s", md["country"], md["region"], md["city"], md["isp"])
-	return address
+	return fmt.Sprintf("%s|%s|%s|%s", md["country"], md["region"], md["city"], md["isp"])
 }
 
-func Format_to_output(md map[string]string) string {
+func Format2Output(md map[string]string) string {
 	//210.78.22.0|210.78.22.255|210.78.22.0/24|中国 上海市 上海市 联通 华东
-	address := fmt.Sprintf("%s|%s|%s|%s|%s", md["country"], md["region"], md["city"], md["isp"], md["area"])
-	return address
+	return fmt.Sprintf("%s|%s|%s|%s|%s", md["country"], md["region"], md["city"], md["isp"], md["area"])
 }
 
 func AllKeyInfoFormat_to_output(md map[string]string) string {
-	suffix := Format_to_output(md)
-	address := fmt.Sprintf("%s %s %s %s", md["ip"], md["end"], md["len"], suffix)
-	return address
+	suffix := Format2Output(md)
+	return fmt.Sprintf("%s %s %s %s", md["ip"], md["end"], md["len"], suffix)
 }
 
 func ConstrucIpMapFromStr(ipinfoline string) map[string]string {

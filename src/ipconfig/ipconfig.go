@@ -1,24 +1,19 @@
 package ipconfig
 
 var (
-	F_need_check_ipsection    = "all/need_checking.ipsection" + ".temp"
-	F_verified_same_ipsection = "all/verified_result.ipsection" + ".temp"
-	F_Middle                  = "all/middle_result_store.txt" + ".temp"
-	F_not_same_ipsection      = "all/not_same.ipsection" + ".temp"
-	F_breakpoint_file         = "all/breakpoint.info" + ".temp"
-	Taobao_url                = "http://ip.taobao.com/service/getIpInfo.php?ip="
+	FILESUFFIX                = ".temp"
+	FileNeedIpsectionCheck    = "all/need_checking.ipsection" + FILESUFFIX
+	FileVerifiedSameIpsection = "all/verified_result.ipsection" + FILESUFFIX
+	FileMiddleDetectedResult  = "all/middle_result_store.txt" + FILESUFFIX
+	FileNotSameIpsection      = "all/not_same.ipsection" + FILESUFFIX
+	FileBreakpoint            = "all/breakpoint.info" + FILESUFFIX
+	TaobaoUrl                 = "http://ip.taobao.com/service/getIpInfo.php?ip="
 )
-
-const BATCH_NUM = 10
-
-var Taobaoip = [2]string{"140.205.140.33", "42.120.226.92"}
-
-const UrlSuffix = "/service/getIpInfo.php?ip="
-const TaobaoHost = "ip.taobao.com"
 
 const (
 	Goon        = "same network"
 	Leftmove    = "left equal, left move to right"
 	Rightmove   = "right equal, right move to left"
 	Morenetwork = "!!!more network!!!"
+	BATCHNUM    = 10
 )
