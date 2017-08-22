@@ -145,10 +145,11 @@ func startRecurseDetect(startip, endip string, ipinfoMap *MySafeMap, resultFP, m
 
 }
 func GetAndSet(log *logger.Logger, ipinfoMap *MySafeMap, ipstr string, middleFP *os.File) map[string]string {
+	var _ms bool
 	var ipMap map[string]string
 	info1, b1 := ipinfoMap.Get(ipstr)
 	if b1 == false {
-		ipMap, _ms := iputil.ParseUrlToMap(log, ipconfig.TaobaoUrl, ipstr)
+		ipMap, _ms = iputil.ParseUrlToMap(log, ipconfig.TaobaoUrl, ipstr)
 		if _ms {
 			t0 := time.Now()
 			WriteIpinfoToFile(middleFP, ipstr, ipstr, 1, ipMap)
