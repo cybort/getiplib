@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"github.com/apsdehal/go-logger"
 	"io"
@@ -144,7 +145,7 @@ func startRecurseDetect(startip, endip string, ipinfoMap *MySafeMap, resultFP, m
 	}(startip, endip, ipinfoMap, resultFP, middleFP, notsameFP, batchControl, log)
 
 }
-func GetAndSet(log *logger.Logger, ipinfoMap *MySafeMap, ipstr string, middleFP *os.File) map[string]string {
+func GetAndSet(log *logger.Logger, ipinfoMap *MySafeMap, ipstr string, middleFP *os.File) (map[string]string, error) {
 	var _ms bool
 	var ipMap map[string]string
 	info1, b1 := ipinfoMap.Get(ipstr)
@@ -157,8 +158,7 @@ func GetAndSet(log *logger.Logger, ipinfoMap *MySafeMap, ipstr string, middleFP 
 			log.DebugF("http get %s took %v seconds", ipstr, t2.Sub(t0))
 			ipinfoMap.Set(ipstr, ipMap)
 		} else {
-			log.ErrorF("http get %s from taobao iplib failed", ipstr)
-			return nil
+			return nil, errors.New("get ipinfo from taobao failed")
 		}
 	}
 	mapMutex.Lock()
@@ -170,9 +170,9 @@ func GetAndSet(log *logger.Logger, ipinfoMap *MySafeMap, ipstr string, middleFP 
 	e := iputil.DeepCopy(&rtnv, ipMap)
 	if e != nil {
 		fmt.Println("Deepcopy failed", ipMap)
-		return nil
+		return nil, errors.New("Deepcopy failed")
 	}
-	return rtnv
+	return rtnv, nil
 }
 func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middleresultFP, notsameFP *os.File, depth int, log *logger.Logger) {
 	defer func() {
@@ -188,20 +188,32 @@ func CalcuAndSplit(startip, endip string, ipinfoMap *MySafeMap, resultFP, middle
 	prefix = prefix + "|" + strconv.Itoa(depth)
 	log.Debug(prefix + "|startip|endip|" + startip + "|" + endip)
 
-	startipMap := GetAndSet(log, ipinfoMap, startip, middleresultFP)
+	startipMap, err := GetAndSet(log, ipinfoMap, startip, middleresultFP)
+	if err != nil {
+		log.ErrorF("%s", err)
+		return
+	}
 	if startip == endip {
 		SaveSameNetwork(startip, endip, startipMap, resultFP, log)
 		return
 	}
 
-	endipMap := GetAndSet(log, ipinfoMap, endip, middleresultFP)
+	endipMap, err := GetAndSet(log, ipinfoMap, endip, middleresultFP)
+	if err != nil {
+		log.ErrorF("%s", err)
+		return
+	}
 	ip1 := iputil.InetAtonInt(startip)
 	ip2 := iputil.InetAtonInt(endip)
 
 	if ip1 < ip2 {
 		m := (ip1 + ip2) / 2
 		mip := iputil.InetNtoaStr(m)
-		mipinfoMap := GetAndSet(log, ipinfoMap, mip, middleresultFP)
+		mipinfoMap, err := GetAndSet(log, ipinfoMap, mip, middleresultFP)
+		if err != nil {
+			log.ErrorF("%s", err)
+			return
+		}
 
 		startinfo := iputil.UsefulInfoForPrint(startipMap)
 		//midinfo := iputil.UsefulInfoForPrint(mipinfoMap)

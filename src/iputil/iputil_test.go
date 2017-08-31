@@ -64,5 +64,5 @@ func TestIpMap(t *testing.T) {
 		t.Errorf("want '' but get %s", ipmap["region"])
 	}
 
-	iputil.GetDetectedIpInfo("../all/same_network.txt")
+	//iputil.GetDetectedIpInfo("../all/same_network.txt")
 }
