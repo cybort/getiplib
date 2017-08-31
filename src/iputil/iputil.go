@@ -254,14 +254,14 @@ func GetDetectedIpInfo(log *logger.Logger, filename string, infoMap map[string]i
 			continue
 		}
 
-		if tempMap["country"] != "" && tempMap["isp"] != "*" && tempMap["region"] {
+		if tempMap["country"] != "" && tempMap["isp"] != "*" && tempMap["region"] != "*" {
 			_, exists := infoMap[tempMap["ip"]]
 			if !exists {
 				infoMap[tempMap["ip"]] = tempMap
 				infoMap[tempMap["end"]] = tempMap
 			}
 		} else {
-			log.InfoF("no country %s", bline)
+			log.InfoF("no country or isp or region %s", bline)
 		}
 	}
 
