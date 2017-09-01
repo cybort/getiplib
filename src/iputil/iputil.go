@@ -238,7 +238,7 @@ func GetDetectedIpInfoSlice(filename string, log *logger.Logger) []map[string]st
 func GetDetectedIpInfo(log *logger.Logger, filename string, infoMap map[string]interface{}) {
 	fp, err := os.Open(filename)
 	if err != nil {
-		log.Critical("open ipinfo file failed")
+		log.CriticalF("open ipinfo file %s failed", filename)
 		return
 	}
 	defer fp.Close()
@@ -246,7 +246,7 @@ func GetDetectedIpInfo(log *logger.Logger, filename string, infoMap map[string]i
 	for {
 		bline, err := br.ReadString('\n')
 		if err != nil {
-			log.Debug("reach end of file")
+			log.DebugF("reach end of file: %s", filename)
 			break
 		}
 		tempMap := ConstrucIpMapFromStr(bline)
@@ -255,6 +255,12 @@ func GetDetectedIpInfo(log *logger.Logger, filename string, infoMap map[string]i
 		}
 
 		if tempMap["country"] != "" && tempMap["isp"] != "*" && tempMap["region"] != "*" {
+			_, exists := infoMap[tempMap["ip"]]
+			if !exists {
+				infoMap[tempMap["ip"]] = tempMap
+				infoMap[tempMap["end"]] = tempMap
+			}
+		} else if tempMap["country"] != "中国" { //foreign country
 			_, exists := infoMap[tempMap["ip"]]
 			if !exists {
 				infoMap[tempMap["ip"]] = tempMap
